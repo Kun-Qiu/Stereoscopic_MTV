@@ -59,13 +59,16 @@ class ImageLineDrawer:
         #          (self.points[3][0], self.points[3][1]),
         #          (0, 255, 0), 1)
 
+        gray_img = cv2.cvtColor(self.resized_image, cv2.COLOR_RGB2GRAY)
+        _, img_thresh = cv2.threshold(gray_img, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+
         min_x = min(self.points[0][0], self.points[1][0], self.points[2][0], self.points[3][0])
         max_x = max(self.points[0][0], self.points[1][0], self.points[2][0], self.points[3][0])
         min_y = min(self.points[0][1], self.points[1][1], self.points[2][1], self.points[3][1])
         max_y = max(self.points[0][1], self.points[1][1], self.points[2][1], self.points[3][1])
 
         # Crop the image to the bounding box
-        cropped_image = cv2.resize(self.resized_image[min_y:max_y, min_x:max_x],
+        cropped_image = cv2.resize(img_thresh[min_y:max_y, min_x:max_x],
                                    (0, 0), fx=1/self.multiplier, fy=1/self.multiplier)
 
         cv2.imwrite(image_path, cropped_image)

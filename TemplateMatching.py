@@ -11,18 +11,17 @@ temp_gray = cv2.cvtColor(temp, cv2.COLOR_RGB2GRAY)
 
 # Apply Tsutomu's thresholding
 _, img_thresh = cv2.threshold(img_gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-_, temp_thresh = cv2.threshold(temp_gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
 
-cv2.imshow("img", img_thresh)
-cv2.imshow("temp", cv2.resize(temp_thresh, (520, 520)))
-cv2.waitKey()
+# cv2.imshow("img", img_thresh)
+# cv2.imshow("temp", cv2.resize(temp_gray, (520, 520)))
+# cv2.waitKey()
 
 # save the image dimensions
 W, H = temp.shape[:2]
 
 # Passing the image to matchTemplate method
 match = cv2.matchTemplate(
-    image=img_thresh, templ=temp_thresh,
+    image=img_thresh, templ=temp_gray,
     method=cv2.TM_CCOEFF_NORMED)
 
 # Define a minimum threshold
@@ -30,38 +29,29 @@ thresh = 0.6
 
 # Select rectangles with confidence greater than threshold
 (y_points, x_points) = np.where(match >= thresh)
+clone = img.copy()
+print("[INFO] {} matched locations *before* NMS".format(len(y_points)))
 
-# initialize our list of rectangles
-boxes = list()
+for (x, y) in zip(x_points, y_points):
+    # draw the bounding box on the image
+    cv2.rectangle(clone, (x, y), (x + W, y + H), (0, 255, 0), 3)
+cv2.imshow("Before NMS", clone)
 
+clone2 = img.copy()
+dx = 0.2
+rects = []
 # loop over the starting (x, y)-coordinates again
 for (x, y) in zip(x_points, y_points):
     # update our list of rectangles
-    boxes.append((x, y, x + W, y + H))
-
+    rects.append((x, y, x + dx * W, y + dx * H))
 # apply non-maxima suppression to the rectangles
-# this will create a single bounding box
-boxes = non_max_suppression(np.array(boxes))
-
-# Define scaling factors
-scale_width = 0.1  # Scale width by 80%
-scale_height = 0.1  # Scale height by 80%
-
+pick = non_max_suppression(np.array(rects))
+print("[INFO] {} matched locations *after* NMS".format(len(pick)))
 # loop over the final bounding boxes
-for (x1, y1, x2, y2) in boxes:
-    # Compute the scaled width and height
-    scaled_width = int((x2 - x1) * scale_width)
-    scaled_height = int((y2 - y1) * scale_height)
-    # Compute new coordinates for the bounding box
-    new_x2 = x1 + scaled_width
-    new_y2 = y1 + scaled_height
-    # draw the scaled bounding box on the image
-    cv2.rectangle(img, (x1, y1), (new_x2, new_y2), (0, 255, 0), 3)
-
-# Show the template and the final output
-cv2.imshow("After NMS", img)
+for (startX, startY, endX, endY) in pick:
+    # draw the bounding box on the image
+    cv2.rectangle(clone2, (startX, startY), (endX, endY),
+                  (255, 0, 0), 3)
+# show the output image
+cv2.imshow("After NMS", clone2)
 cv2.waitKey(0)
-
-# destroy all the windows
-# manually to be on the safe side
-cv2.destroyAllWindows()
