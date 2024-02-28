@@ -7,25 +7,26 @@ from Utility.DeNoise import denoised_image
 img = cv2.imread('Data/Source/source.png')
 img_gray = denoised_image('Data/Source/source.png')
 temp = cv2.imread('Data/Template/temp.jpg')
-temp_gray = cv2.cvtColor(temp, cv2.COLOR_BGR2GRAY)
+temp_gray = cv2.cvtColor(temp, cv2.COLOR_RGB2GRAY)
 
-# # Apply Tsutomu's thresholding
-# _, img_thresh = cv2.threshold(img_gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-# _, temp_thresh = cv2.threshold(temp_gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+# Apply Tsutomu's thresholding
+_, img_thresh = cv2.threshold(img_gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+_, temp_thresh = cv2.threshold(temp_gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
 
-img_edge = cv2.Canny(img_gray, 100, 200, apertureSize=3, L2gradient=False)
-temp_edge = cv2.Canny(temp_gray, 100, 200, apertureSize=3, L2gradient=False)
+cv2.imshow("img", img_thresh)
+cv2.imshow("temp", cv2.resize(temp_thresh, (520, 520)))
+cv2.waitKey()
 
 # save the image dimensions
 W, H = temp.shape[:2]
 
 # Passing the image to matchTemplate method
 match = cv2.matchTemplate(
-    image=img_edge, templ=temp_edge,
+    image=img_thresh, templ=temp_thresh,
     method=cv2.TM_CCOEFF_NORMED)
 
 # Define a minimum threshold
-thresh = 0.3
+thresh = 0.6
 
 # Select rectangles with confidence greater than threshold
 (y_points, x_points) = np.where(match >= thresh)
@@ -55,7 +56,7 @@ for (x1, y1, x2, y2) in boxes:
     new_x2 = x1 + scaled_width
     new_y2 = y1 + scaled_height
     # draw the scaled bounding box on the image
-    cv2.rectangle(img, (x1, y1), (new_x2, new_y2), (255, 0, 0), 3)
+    cv2.rectangle(img, (x1, y1), (new_x2, new_y2), (0, 255, 0), 3)
 
 # Show the template and the final output
 cv2.imshow("After NMS", img)
