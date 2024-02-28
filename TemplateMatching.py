@@ -1,69 +1,66 @@
-import numpy as np
 import cv2
+import numpy as np
 from imutils.object_detection import non_max_suppression
-import argparse
+from Utility.DeNoise import denoised_image
 
+# Load the images
+img = cv2.imread('Data/Source/source.png')
+img_gray = denoised_image('Data/Source/source.png')
+temp = cv2.imread('Data/Template/temp.jpg')
+temp_gray = cv2.cvtColor(temp, cv2.COLOR_BGR2GRAY)
 
-def select_template(image_path):
-    # Load the image
-    image = cv2.imread(image_path)
+# # Apply Tsutomu's thresholding
+# _, img_thresh = cv2.threshold(img_gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+# _, temp_thresh = cv2.threshold(temp_gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
 
-    # Display the image and allow the user to select a ROI
-    roi = cv2.selectROI("Select Template", image, fromCenter=False, showCrosshair=True)
-    cv2.destroyAllWindows()
+img_edge = cv2.Canny(img_gray, 100, 200, apertureSize=3, L2gradient=False)
+temp_edge = cv2.Canny(temp_gray, 100, 200, apertureSize=3, L2gradient=False)
 
-    # Crop the selected ROI
-    template = image[int(roi[1]):int(roi[1] + roi[3]), int(roi[0]):int(roi[0] + roi[2])]
+# save the image dimensions
+W, H = temp.shape[:2]
 
-    return template
+# Passing the image to matchTemplate method
+match = cv2.matchTemplate(
+    image=img_edge, templ=temp_edge,
+    method=cv2.TM_CCOEFF_NORMED)
 
+# Define a minimum threshold
+thresh = 0.3
 
-def main(image_path, threshold):
-    # Load the input image
-    image = cv2.imread(image_path)
+# Select rectangles with confidence greater than threshold
+(y_points, x_points) = np.where(match >= thresh)
 
-    # Select the template manually
-    template = select_template(image_path)
-    (tH, tW) = template.shape[:2]
+# initialize our list of rectangles
+boxes = list()
 
-    # Convert both the image and template to grayscale
-    imageGray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    templateGray = cv2.cvtColor(template, cv2.COLOR_BGR2GRAY)
+# loop over the starting (x, y)-coordinates again
+for (x, y) in zip(x_points, y_points):
+    # update our list of rectangles
+    boxes.append((x, y, x + W, y + H))
 
-    # Perform template matching
-    print("[INFO] performing template matching...")
-    result = cv2.matchTemplate(imageGray, templateGray, cv2.TM_CCOEFF_NORMED)
+# apply non-maxima suppression to the rectangles
+# this will create a single bounding box
+boxes = non_max_suppression(np.array(boxes))
 
-    # Find all locations in the result map where the matched value is greater than the threshold
-    loc = np.where(result >= threshold)
+# Define scaling factors
+scale_width = 0.1  # Scale width by 80%
+scale_height = 0.1  # Scale height by 80%
 
-    # Loop over all match locations and draw dots at the center
-    for pt in zip(*loc[::-1]):
-        # Calculate the center of the match
-        center = (pt[0] + int(tW / 2), pt[1] + int(tH / 2))
-        # Draw a dot at the center
-        cv2.circle(image, center, 5, (255, 0, 0), -1)
+# loop over the final bounding boxes
+for (x1, y1, x2, y2) in boxes:
+    # Compute the scaled width and height
+    scaled_width = int((x2 - x1) * scale_width)
+    scaled_height = int((y2 - y1) * scale_height)
+    # Compute new coordinates for the bounding box
+    new_x2 = x1 + scaled_width
+    new_y2 = y1 + scaled_height
+    # draw the scaled bounding box on the image
+    cv2.rectangle(img, (x1, y1), (new_x2, new_y2), (255, 0, 0), 3)
 
-    # Apply non-maxima suppression to the matched locations
-    pick = non_max_suppression(np.array([center + (center[0] + tW, center[1] + tH) for center in zip(*loc[::-1])]))
+# Show the template and the final output
+cv2.imshow("After NMS", img)
+cv2.waitKey(0)
 
-    # Loop over the final bounding boxes
-    for (startX, startY, endX, endY) in pick:
-        # Draw the bounding box on the image
-        cv2.rectangle(image, (startX, startY), (endX, endY), (255, 0, 0), 3)
-
-    # Show the output image
-    cv2.imshow("After NMS", image)
-    cv2.waitKey(0)
-
-
-if __name__ == "__main__":
-    # Construct the argument parser and parse the arguments
-    ap = argparse.ArgumentParser()
-    ap.add_argument("-i", "--image", type=str, required=True,
-                    help="path to input image where we'll apply template matching")
-    ap.add_argument("-b", "--threshold", type=float, default=0.8,
-                    help="threshold for multi-template matching")
-    args = vars(ap.parse_args())
-
-    main(args["image"], args["threshold"])
+# destroy all the windows
+# manually to be on the safe side
+cv2.destroyAllWindows()
