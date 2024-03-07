@@ -2,6 +2,7 @@ import torch
 import torch.nn.functional as F
 import torch.optim as optim
 import OpticalFlow
+import TemplateMatching
 import matplotlib.pyplot as plt
 import numpy as np
 import cv2
@@ -105,31 +106,66 @@ def optimize_displacement_field(model, observed_displacements, optimizer, num_ep
             print(f'Epoch [{epoch + 1}/{num_epochs}], Loss: {loss.item()}')
 
 
-# Load original image and displacement field (example)
-source_path = 'Data/Source/source.png'
-target_path = 'Data/Target/frame_31.png'
-source_image = cv2.imread(source_path)
-target_image = cv2.imread(target_path)
-
-of_object = OpticalFlow.OpticalFlow(source_path, target_path)
-of_object.calculate_optical_flow()
-
-predicted_target_image = displace_image(source_image, of_object.get_flow())
-loss = displacement_loss(source_image, target_image, of_object.get_flow())
-print(loss)
-
-# Display the image
-plt.imshow(predicted_target_image)
-plt.axis('off')
-plt.show()
-
-# # Assuming grid_images are your input images
-# grid_images = ...  # Provide your grid images here
-# observed_displacements = ...  # Provide your observed displacements here
-#
 # # Initialize your displacement field model and optimizer
 # model = DisplacementFieldModel()
 # optimizer = optim.Adam(model.parameters(), lr=0.01)
 #
 # # Optimize the displacement field
 # optimize_displacement_field(model, observed_displacements, optimizer)
+
+"""
+Driver Code
+"""
+# Load original image and displacement field (example)
+source_path = 'Data/Source/source.png'
+target_path = 'Data/Target/frame_31.png'
+template_path = 'Data/Template/temp.jpg'
+intersection = 'Data/Template/intersection.txt'
+source_image = cv2.imread(source_path)
+target_image = cv2.imread(target_path)
+template_image = cv2.imread(template_path)
+
+# of_object = OpticalFlow.OpticalFlow(source_path, target_path)
+# of_object.calculate_optical_flow()
+# of_object.visualize_flow()
+
+source_match = TemplateMatching.TemplateMatcher(source_path, template_path, intersection)
+target_match = TemplateMatching.TemplateMatcher(target_path, template_path, intersection)
+source_match.match_template()
+target_match.match_template()
+source_match.visualizeMatchAfterNonMaxSuppression()
+target_match.visualizeMatchAfterNonMaxSuppression()
+
+
+correspondence = source_match.matching_displacement(target_match)
+matched_points_source = np.array([source_match.get_x_coord(), source_match.get_y_coord()])
+matched_points_target = np.array([target_match.get_x_coord(), target_match.get_y_coord()])
+
+# Plotting
+plt.figure(figsize=(8, 6))
+plt.scatter(matched_points_source[0], matched_points_source[1], c='b', label='Source Points')
+plt.scatter(matched_points_target[0], matched_points_target[1], c='r', label='Target Points')
+
+# Plot correspondences
+for correspondence_pair in correspondence:
+    source_idx, target_idx = correspondence_pair
+    source_point = matched_points_source[:, source_idx]
+    target_point = matched_points_target[:, target_idx]
+    plt.plot([source_point[0], target_point[0]], [source_point[1], target_point[1]], 'g--')
+
+plt.xlabel('X')
+plt.ylabel('Y')
+plt.title('Correspondences between Source and Target Points')
+plt.legend()
+plt.grid(True)
+plt.show()
+
+# predicted_target_image = displace_image(source_image, of_object.get_flow())
+# loss = displacement_loss(source_image, target_image, of_object.get_flow())
+# print(loss)
+#
+# # Display the image
+# plt.imshow(predicted_target_image)
+# plt.axis('off')
+# plt.show()
+
