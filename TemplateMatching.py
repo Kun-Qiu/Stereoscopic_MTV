@@ -1,61 +1,100 @@
 import cv2
 import numpy as np
 from imutils.object_detection import non_max_suppression
-from Utility.DeNoise import denoised_image
+import argparse
 
-# Load the images
-img = cv2.imread('Data/Source/source.png')
-img_gray = denoised_image('Data/Source/source.png')
 
-img2 = cv2.imread('Data/Target/target.png')
-img_target = denoised_image('Data/Target/target.png')
-temp = cv2.imread('Data/Template/temp.jpg')
-temp_gray = cv2.cvtColor(temp, cv2.COLOR_RGB2GRAY)
+class TemplateMatcher:
+    def __init__(self, source_image_path, template_path, intersection_path):
+        """
+        Class initialization for the template matcher
+        :param source_image_path: path to source image
+        :param template_path: path to template image
+        :param intersection_path: path to intersection txt
+        """
 
-intersection = np.loadtxt('Data/Template/intersection.txt')
+        self.source = cv2.imread(source_image_path)
+        self.template = cv2.imread(template_path)
+        self.intersection = np.loadtxt(intersection_path)
+        self.matchedXCoordPreNMS = []
+        self.matchedYCoordPreNMS = []
+        self.matchedXCoordPostNMS = []
+        self.matchedYCoordPostNMS = []
 
-# Apply Tsutomu's thresholding
-_, img_thresh = cv2.threshold(img_target, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    def match_template(self):
+        """
+        Main driver for template matching using openCV
+        :return: None
+        """
+        # Apply Tsutomu's thresholding
+        _, img_thresh = cv2.threshold(self.source, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+        temp_gray = cv2.cvtColor(self.template, cv2.COLOR_BGR2GRAY)
 
-# save the image dimensions
-W, H = temp.shape[:2]
+        match = cv2.matchTemplate(
+            image=img_thresh, templ=temp_gray,
+            method=cv2.TM_CCOEFF_NORMED)
 
-# Passing the image to matchTemplate method
-match = cv2.matchTemplate(
-    image=img_thresh, templ=temp_gray,
-    method=cv2.TM_CCOEFF_NORMED)
+        # Minimum correlation threshold
+        thresh = 0.6
+        (self.matchedYCoordPreNMS, self.matchedXCoordPreNMS) = np.where(match >= thresh)
 
-# Define a minimum threshold
-thresh = 0.6
+    def visualizeMatchBeforeNMS(self):
+        """
+        Visualize the match before NMS
+        :return: Visualize the match
+        """
+        W, H = self.template.shape[:2]
+        clone = self.source.copy()
+        print("[INFO] {} matched locations *before* NMS".format(len(self.matchedYCoordPreNMS)))
 
-# Select rectangles with confidence greater than threshold
-(y_points, x_points) = np.where(match >= thresh)
-clone = img.copy()
-print("[INFO] {} matched locations *before* NMS".format(len(y_points)))
+        for (x, y) in zip(self.matchedXCoordPreNMS, self.matchedYCoordPreNMS):
+            cv2.rectangle(clone, (x, y), (x + W, y + H), (0, 255, 0), 3)
+        cv2.imshow("Before NMS", clone)
+        cv2.waitKey(0)
 
-for (x, y) in zip(x_points, y_points):
-    # draw the bounding box on the image
-    cv2.rectangle(clone, (x, y), (x + W, y + H), (0, 255, 0), 3)
-cv2.imshow("Before NMS", clone)
+    def VisualizeMatchAfterNonMaxSuppression(self, dx=0.4):
+        """
+        Visualize the match after NMS
+        :param dx: size of the rectangle to check for overlap
+        :return: Visualize the match
+        """
 
-clone2 = img2.copy()
-dx = 0.4
-rects = []
+        W, H = self.template.shape[:2]
+        clone = self.source.copy()
+        rects = []
 
-# loop over the starting (x, y)-coordinates again
-for (x, y) in zip(x_points, y_points):
-    # update our list of rectangles
-    rects.append((x, y, x + dx * W, y + dx * H))
-# apply non-maxima suppression to the rectangles
+        for (x, y) in zip(self.matchedXCoordPreNMS, self.matchedYCoordPreNMS):
+            rects.append((x, y, x + dx * W, y + dx * H))
 
-pick = non_max_suppression(np.array(rects))
-print("[INFO] {} matched locations *after* NMS".format(len(pick)))
-# loop over the final bounding boxes
-for (startX, startY, endX, endY) in pick:
-    # draw the bounding box on the image
-    # cv2.rectangle(clone2, (startX, startY), (endX, endY),
-    #               (255, 0, 0), 3)
-    cv2.circle(clone2, (startX + int(intersection[0]), startY + int(intersection[1])), 2, (0, 255, 0), -1)
-# show the output image
-cv2.imshow("After NMS", clone2)
-cv2.waitKey(0)
+        # apply non-maxima suppression to the rectangles
+        pick = non_max_suppression(np.array(rects))
+        print("[INFO] {} matched locations *after* NMS".format(len(pick)))
+
+        for (startX, startY, endX, endY) in pick:
+            cv2.circle(clone, (int(startX + self.intersection[0]), int(startY + self.intersection[1])),
+                       2, (0, 255, 0), -1)
+            self.matchedXCoordPostNMS.append(startX)
+            self.matchedYCoordPostNMS.append(startY)
+        cv2.imshow("After NMS", clone)
+        cv2.waitKey(0)
+
+    def get_x_coord(self):
+        return self.matchedXCoordPostNMS
+
+    def get_y_coord(self):
+        return self.matchedYCoordPostNMS
+
+    # def displacement(self, other):
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Template Matching")
+    parser.add_argument("source_image", help="Path to the source image")
+    parser.add_argument("template", help="Path to the template image")
+    parser.add_argument("intersection", help="Path to the intersection file")
+    args = parser.parse_args()
+
+    matcher = TemplateMatcher(args.source_image, args.template, args.intersection)
+    matcher.match_template()
+    matcher.visualizeMatchBeforeNMS()
+    matcher.VisualizeMatchAfterNonMaxSuppression()
