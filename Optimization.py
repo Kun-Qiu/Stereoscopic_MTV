@@ -117,9 +117,9 @@ def optimize_displacement_field(model, observed_displacements, optimizer, num_ep
 Driver Code
 """
 # Load original image and displacement field (example)
-source_path = 'Data/Source/source.png'
-target_path = 'Data/Target/frame_31.png'
-template_path = 'Data/Template/temp.jpg'
+source_path = 'Data/Source/frame_1.png'
+target_path = 'Data/Target/frame_1_2us.png'
+template_path = 'Data/Template/frame_1_temp.png'
 intersection = 'Data/Template/intersection.txt'
 source_image = cv2.imread(source_path)
 target_image = cv2.imread(target_path)
@@ -129,35 +129,35 @@ template_image = cv2.imread(template_path)
 # of_object.calculate_optical_flow()
 # of_object.visualize_flow()
 
-source_match = TemplateMatching.TemplateMatcher(source_path, template_path, intersection)
-target_match = TemplateMatching.TemplateMatcher(target_path, template_path, intersection)
-source_match.match_template()
-target_match.match_template()
-source_match.visualizeMatchAfterNonMaxSuppression()
-target_match.visualizeMatchAfterNonMaxSuppression()
+source = TemplateMatching.TemplateMatcher(source_path, template_path, intersection)
+target = TemplateMatching.TemplateMatcher(target_path, template_path, intersection)
+source.match_template()
+target.match_template()
+# source.visualizeMatchBeforeNMS()
+# source.visualizeMatchAfterNonMaxSuppression()
+# target.visualizeMatchAfterNonMaxSuppression()
 
-
-correspondence = source_match.matching_displacement(target_match)
-matched_points_source = np.array([source_match.get_x_coord(), source_match.get_y_coord()])
-matched_points_target = np.array([target_match.get_x_coord(), target_match.get_y_coord()])
+correspondence = source.matching_displacement(target)
+print(correspondence)
+matched_points_source = np.array([source.get_x_coord(), source.get_y_coord()])
+matched_points_target = np.array([target.get_x_coord(), target.get_y_coord()])
 
 # Plotting
 plt.figure(figsize=(8, 6))
-plt.scatter(matched_points_source[0], matched_points_source[1], c='b', label='Source Points')
-plt.scatter(matched_points_target[0], matched_points_target[1], c='r', label='Target Points')
+# plt.scatter(matched_points_source[0], matched_points_source[1], c='b', label='Source Points')
+# plt.scatter(matched_points_target[0], matched_points_target[1], c='r', label='Target Points')
 
-# Plot correspondences
-for correspondence_pair in correspondence:
-    source_idx, target_idx = correspondence_pair
-    source_point = matched_points_source[:, source_idx]
-    target_point = matched_points_target[:, target_idx]
-    plt.plot([source_point[0], target_point[0]], [source_point[1], target_point[1]], 'g--')
+# Plot vectors
+for i in range(len(correspondence)):
+    plt.scatter(correspondence[i][0][0], correspondence[i][0][1],
+                color='blue', marker='o')
+    plt.arrow(correspondence[i][0][0], correspondence[i][0][1],
+              correspondence[i][1][0] - correspondence[i][0][0],
+              correspondence[i][1][1] - correspondence[i][0][1],
+              head_width=2, head_length=4, fc='red', ec='red')
 
 plt.xlabel('X')
 plt.ylabel('Y')
-plt.title('Correspondences between Source and Target Points')
-plt.legend()
-plt.grid(True)
 plt.show()
 
 # predicted_target_image = displace_image(source_image, of_object.get_flow())
@@ -168,4 +168,3 @@ plt.show()
 # plt.imshow(predicted_target_image)
 # plt.axis('off')
 # plt.show()
-

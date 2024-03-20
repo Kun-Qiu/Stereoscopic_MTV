@@ -82,9 +82,14 @@ class ImageLineDrawer:
         min_y = min(self.points[0][1], self.points[1][1], self.points[2][1], self.points[3][1])
         max_y = max(self.points[0][1], self.points[1][1], self.points[2][1], self.points[3][1])
 
+        # length to adjacent point
+        length = 0.5 * np.sqrt((self.points[0][0] - self.points[1][0]) ** 2 +
+                               (self.points[0][1] - self.points[1][1]) ** 2)
+
         inter_x, inter_y = self.find_intersection()
         intersection_point_relative = np.array([int((inter_x - min_x) / self.multiplier),
-                                                int((inter_y - min_y) / self.multiplier)])
+                                                int((inter_y - min_y) / self.multiplier),
+                                                int(length)])
 
         # Crop the image to the bounding box
         cropped_image = cv2.resize(img_thresh[min_y:max_y, min_x:max_x],
@@ -116,7 +121,7 @@ if __name__ == "__main__":
     """
     Argument parsing --> Driver code 
     Example terminal command -> 
-    python .\Utility\Template.py .\path_to_image .\path_to template --multi image_scale
+    python Template.py path_to_image path_to template --multi image_scale
     """
     parser = argparse.ArgumentParser(description='Draw lines on an image')
     parser.add_argument('image_path', type=str, help='Path to the input image file')

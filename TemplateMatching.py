@@ -2,7 +2,7 @@ import cv2
 import numpy as np
 from imutils.object_detection import non_max_suppression
 import argparse
-from scipy.spatial.distance import cdist
+import matplotlib.pyplot as plt
 
 
 class TemplateMatcher:
@@ -21,8 +21,9 @@ class TemplateMatcher:
         self._matchedYCoordPreNMS = []
         self._matchedXCoordPostNMS = []
         self._matchedYCoordPostNMS = []
+        self._scaledIntersection = []
 
-    def match_template(self):
+    def match_template(self, scale_num=3):
         """
         Main driver for template matching using openCV
         :return: None
@@ -34,37 +35,58 @@ class TemplateMatcher:
         _, img_thresh = cv2.threshold(gray_source, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
         temp_gray = cv2.cvtColor(self._template, cv2.COLOR_BGR2GRAY)
 
-        match = cv2.matchTemplate(
-            image=img_thresh, templ=temp_gray,
-            method=cv2.TM_CCOEFF_NORMED)
+        for iteration in range(scale_num):
+            scale = 1 - 0.1 * iteration
 
-        # Minimum correlation threshold
-        thresh = 0.6
-        (self._matchedYCoordPreNMS, self._matchedXCoordPreNMS) = np.where(match >= thresh)
+            new_height = int((1 - scale) * temp_gray.shape[0] / 2)
+            new_width = int((1 - scale) * temp_gray.shape[1] / 2)
+
+            # Crop the image from both sides
+            scaled_template = temp_gray[new_height:(temp_gray.shape[0] - new_height),
+                              new_width:(temp_gray.shape[1] - new_width)]
+
+            match = cv2.matchTemplate(image=img_thresh,
+                                      templ=scaled_template,
+                                      method=cv2.TM_CCOEFF_NORMED)
+
+            intersection_point = [self._intersection[0] - new_width,
+                                  self._intersection[1] - new_height]
+
+            # Minimum correlation threshold
+            thresh = 0.6
+            temp_y, temp_x = np.where(match >= thresh)
+            for i in range(len(temp_y)):
+                self._matchedYCoordPreNMS.append(temp_y[i])
+                self._matchedXCoordPreNMS.append(temp_x[i])
+                self._scaledIntersection.append(intersection_point)
+
+        self.NonMaxSuppression()
 
     def visualizeMatchBeforeNMS(self):
         """
         Visualize the match before NMS
         :return: Visualize the match
         """
-        W, H = self._template.shape[:2]
         clone = self._source.copy()
         print("[INFO] {} matched locations *before* NMS".format(len(self._matchedYCoordPreNMS)))
 
+        count = 0
         for (x, y) in zip(self._matchedXCoordPreNMS, self._matchedYCoordPreNMS):
-            cv2.rectangle(clone, (x, y), (x + W, y + H), (0, 255, 0), 3)
+            cv2.circle(clone, (int(x + self._scaledIntersection[count][0]),
+                               int(y + self._scaledIntersection[count][1])),
+                       2, (0, 255, 0), -1)
+            count += 1
         cv2.imshow("Before NMS", clone)
         cv2.waitKey(0)
 
-    def visualizeMatchAfterNonMaxSuppression(self, dx=0.4):
+    def NonMaxSuppression(self, dx=2 / 3):
         """
-        Visualize the match after NMS
+        Reduce the amount of overlapping points in the template matching process
         :param dx: size of the rectangle to check for overlap
-        :return: Visualize the match
+        :return: None
         """
 
         W, H = self._template.shape[:2]
-        clone = self._source.copy()
         rects = []
 
         for (x, y) in zip(self._matchedXCoordPreNMS, self._matchedYCoordPreNMS):
@@ -74,11 +96,26 @@ class TemplateMatcher:
         pick = non_max_suppression(np.array(rects))
         print("[INFO] {} matched locations *after* NMS".format(len(pick)))
 
+        count = 0
         for (startX, startY, endX, endY) in pick:
-            cv2.circle(clone, (int(startX + self._intersection[0]), int(startY + self._intersection[1])),
+            x_inter = int(startX + self._scaledIntersection[count][0])
+            y_inter = int(startY + self._scaledIntersection[count][1])
+            self._matchedXCoordPostNMS.append(x_inter)
+            self._matchedYCoordPostNMS.append(y_inter)
+
+            count += 1
+
+    def visualizeMatchAfterNonMaxSuppression(self):
+        """
+        Visualize the match after NMS
+        :param dx: size of the rectangle to check for overlap
+        :return: None
+        """
+
+        clone = self._source.copy()
+        for i in range(len(self._matchedXCoordPostNMS)):
+            cv2.circle(clone, (self._matchedXCoordPostNMS[i], self._matchedYCoordPostNMS[i]),
                        2, (0, 255, 0), -1)
-            self._matchedXCoordPostNMS.append(startX)
-            self._matchedYCoordPostNMS.append(startY)
         cv2.imshow("After NMS", clone)
         cv2.waitKey(0)
 
@@ -89,31 +126,25 @@ class TemplateMatcher:
         :param target: target object
         :return: A correspondence between the intersection points
         """
-        x1 = np.array(self._matchedXCoordPostNMS)
-        y1 = np.array(self._matchedYCoordPostNMS)
-        x2 = np.array(target.get_x_coord)
-        y2 = np.array(target.get_y_coord)
+        distance_thresh = 0.5 * self._intersection[2]
 
         # Construct arrays of coordinates for each point
-        points1 = np.column_stack((x1, y1))
-        points2 = np.column_stack((x2, y2))
+        source = np.column_stack((self._matchedXCoordPostNMS,
+                                  self._matchedYCoordPostNMS))
+        target = np.column_stack((target.get_x_coord(),
+                                  target.get_y_coord()))
 
-        # Calculate pairwise distances between points
-        distances = cdist(points1, points2)
+        correspondence = []
+        for x in source:
+            dist_x = []
+            for y in target:
+                dist_x.append(np.sqrt((y[0] - x[0]) ** 2 + (y[1] - x[1]) ** 2))
 
-        # Find the indices of the closest point in the second array for each point in the first array
-        closest_indices = np.argmin(distances, axis=1)
+            min_index = np.argmin(dist_x)  # Find the minimum distance for the current source point
+            if dist_x[min_index] < distance_thresh:
+                correspondence.append([x, target[min_index]])
 
-        correspondences = []
-
-        W, H = self._template.shape[:2]
-        thresh = np.sqrt(W ** 2 + H ** 2) / 2
-
-        for i, closest_idx in enumerate(closest_indices):
-            # Only consider correspondences where the distance is below a threshold
-            if distances[i, closest_idx] < thresh:
-                correspondences.append((i, closest_idx))
-        return correspondences
+        return correspondence
 
     def get_x_coord(self):
         return self._matchedXCoordPostNMS

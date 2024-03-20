@@ -34,7 +34,7 @@ class OpticalFlow:
         plt.quiver(range(0, self._flow.shape[1], 10),
                    range(0, self._flow.shape[0], 10),
                    self._flow[::10, ::10, 0],  # u component of flow
-                   self._flow[::10, ::10, 1],  # v component of flow (invert y-axis)
+                   -1 * self._flow[::10, ::10, 1],  # v component of flow (invert y-axis)
                    magnitude[::10, ::10],  # magnitude of flow
                    angles='xy', scale_units='xy', scale=1, cmap='viridis')
         plt.colorbar()  # Add color bar to indicate magnitude
