@@ -4,12 +4,8 @@ import argparse
 import matplotlib.pyplot as plt
 
 
-def generatingDisplacement(img_size, min_value, max_value, mode):
+def generatingDisplacement(img_size, dx, dy, mode):
     height, width, channels = img_size
-
-    # Generate random displacement values within the specified range
-    dx = np.random.randint(min_value, max_value + 1)
-    dy = np.random.randint(min_value, max_value + 1)
 
     # 2D array to store displacement vectors
     displacement_field = np.zeros((height, width, 2), dtype=float)
@@ -22,16 +18,21 @@ def generatingDisplacement(img_size, min_value, max_value, mode):
                 distance_from_center = np.sqrt((x - width // 2) ** 2 + (y - height // 2) ** 2)
                 vortex_speed = 1 / (1 + distance_from_center)  # Adjusted vortex formula
                 displacement_field[y, x] = [dx * vortex_speed, dy * vortex_speed]
+
     return displacement_field
 
 
 def display_displacement_field(displacement_field, subsampling_factor=10):
     # Extract displacement components
     dx_plot = displacement_field[:, :, 0]
-    dy_plot = -1 * displacement_field[:, :, 1]  # Invert y-component
 
-    # Calculate magnitude
-    magnitude = np.sqrt(dx_plot**2 + dy_plot**2)
+    """
+    Due to the coordinate system start from top left on an image,
+    y displacement need to be inverted
+    """
+    dy_plot = -1 * displacement_field[:, :, 1]
+
+    magnitude = np.sqrt(dx_plot ** 2 + dy_plot ** 2)
 
     # Create grid coordinates for quiver plot
     y_plot, x_plot = np.mgrid[0:dx_plot.shape[0], 0:dx_plot.shape[1]]
@@ -52,9 +53,9 @@ def display_displacement_field(displacement_field, subsampling_factor=10):
     plt.title('Displacement Field Magnitude')
 
     # Plot unit vectors for direction
-    dx_uni_vector = dx_plot_subsampled/magnitude_subsampled
-    dy_uni_vector = dy_plot_subsampled/magnitude_subsampled
-    plt.quiver(x_plot_subsampled, y_plot_subsampled, dx_uni_vector, dy_uni_vector ,
+    dx_uni_vector = dx_plot_subsampled / magnitude_subsampled
+    dy_uni_vector = dy_plot_subsampled / magnitude_subsampled
+    plt.quiver(x_plot_subsampled, y_plot_subsampled, dx_uni_vector, dy_uni_vector,
                scale=50, color='white')
 
     plt.gca().set_aspect('equal', adjustable='box')
@@ -102,9 +103,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Displace an image.')
     parser.add_argument('input_img', type=str, help='Path to the input image')
     parser.add_argument('target_path', type=str, help='Path to save image')
-    parser.add_argument('--min_val', type=int, default=-3, help='Minimum displacement value')
-    parser.add_argument('--max_val', type=int, default=3, help='Maximum displacement value')
+    parser.add_argument('--dx', type=int, default=-3, help='Minimum displacement value')
+    parser.add_argument('--dy', type=int, default=3, help='Maximum displacement value')
     parser.add_argument('--mode', type=str, default='constant', choices=['constant', 'vortex'],
                         help='Mode for displacement')
     args = parser.parse_args()
-    main(args.input_img, args.target_path, args.min_val, args.max_val, args.mode)
+    main(args.input_img, args.target_path, args.dx, args.dy, args.mode)

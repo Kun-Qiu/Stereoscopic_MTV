@@ -2,7 +2,6 @@ import cv2
 import numpy as np
 from imutils.object_detection import non_max_suppression
 import argparse
-import matplotlib.pyplot as plt
 
 
 class TemplateMatcher:
@@ -23,13 +22,15 @@ class TemplateMatcher:
         self._matchedYCoordPostNMS = []
         self._scaledIntersection = []
 
-    def match_template(self, scale_num=3):
+    def match_template(self, scale_num=1):
         """
         Main driver for template matching using openCV
+        Since float is being converted into int for the intersections, the error accumulates
+        exponentially as the scale_num increase
         :return: None
         """
         gray_source = self._source
-        if len(self._source.shape) == 3:  # Check if the source image is color (not grayscale)
+        if len(self._source.shape) == 3:
             gray_source = cv2.cvtColor(self._source, cv2.COLOR_BGR2GRAY)
 
         _, img_thresh = cv2.threshold(gray_source, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
@@ -126,7 +127,7 @@ class TemplateMatcher:
         :param target: target object
         :return: A correspondence between the intersection points
         """
-        distance_thresh = 0.5 * self._intersection[2]
+        distance_thresh = 0.25 * self.get_length()
 
         # Construct arrays of coordinates for each point
         source = np.column_stack((self._matchedXCoordPostNMS,
@@ -151,6 +152,9 @@ class TemplateMatcher:
 
     def get_y_coord(self):
         return self._matchedYCoordPostNMS
+
+    def get_length(self):
+        return self._intersection[2]
 
 
 def main():

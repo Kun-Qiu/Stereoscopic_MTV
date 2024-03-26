@@ -35,11 +35,8 @@ def displace_image(image, displacement_field, tensor=False):
     return displaced_image
 
 
-# def known_displacement_loss(predicted_displacement, known_displacement):
-#
-
-
 # __________________________________________________________________________________________
+
 class DisplacementFieldModel(torch.nn.Module):
     def __init__(self, initial_guess):
         super(DisplacementFieldModel, self).__init__()
@@ -50,7 +47,7 @@ class DisplacementFieldModel(torch.nn.Module):
         return self.displacements
 
 
-def displacement_loss(source, target, predicted_field, target_field=None, lambda_vel=0.1, lambda_tv=0.1):
+def displacement_loss(source, target, predicted_field, target_field=None, lambda_tv=0.1):
     """
     Calculation of the loss function of the displacement field with 3 Components:
     Intensity Difference (Optical Flow), Velocity Difference (Template Matching),
@@ -59,7 +56,6 @@ def displacement_loss(source, target, predicted_field, target_field=None, lambda
     :param target: target image
     :param predicted_field: predicted displacement field
     :param target_field: template matching displacement field
-    :param lambda_vel: velocity regularizer
     :param lambda_tv: variation regularizer
     :return: The total loss
     """
@@ -67,7 +63,7 @@ def displacement_loss(source, target, predicted_field, target_field=None, lambda
     predicted_image = displace_image(source, predicted_field, tensor=True)
     loss_component1 = torch.mean(torch.square(predicted_image - target))
 
-    # # Component 2: Difference between known displacement at certain locations
+    # Component 2: Difference between known displacement at certain locations
     # loss_component2 = lambda_tv * torch.mean(torch.square(predicted_displacements - observed_displacements))
 
     # # Component 3: Total variation regularization
@@ -76,6 +72,11 @@ def displacement_loss(source, target, predicted_field, target_field=None, lambda
     # # Combine components with appropriate weights
     total_loss = loss_component1
     return total_loss
+
+
+def optical_template_loss(optical_flow, template, lambda_vel=0.1):
+    for x, y, dx, dz, i in enumerate(template):
+        asd = 2
 
 
 # Function to compute total variation regularization
@@ -117,16 +118,16 @@ def optimize_displacement_field(model, observed_displacements, optimizer, num_ep
 Driver Code
 """
 # Load original image and displacement field (example)
-source_path = 'Data/Source/frame_1.png'
-target_path = 'Data/Target/frame_1_2us.png'
+source_path = 'Data/Source/frame_0.png'
+target_path = 'Data/Target/synethetic_0.png'
 template_path = 'Data/Template/frame_1_temp.png'
 intersection = 'Data/Template/intersection.txt'
 source_image = cv2.imread(source_path)
 target_image = cv2.imread(target_path)
 template_image = cv2.imread(template_path)
 
-# of_object = OpticalFlow.OpticalFlow(source_path, target_path)
-# of_object.calculate_optical_flow()
+of_object = OpticalFlow.OpticalFlow(source_path, target_path)
+of_object.calculate_optical_flow()
 # of_object.visualize_flow()
 
 source = TemplateMatching.TemplateMatcher(source_path, template_path, intersection)
@@ -138,9 +139,8 @@ target.match_template()
 # target.visualizeMatchAfterNonMaxSuppression()
 
 correspondence = source.matching_displacement(target)
-print(correspondence)
-matched_points_source = np.array([source.get_x_coord(), source.get_y_coord()])
-matched_points_target = np.array([target.get_x_coord(), target.get_y_coord()])
+# matched_points_source = np.array([source.get_x_coord(), source.get_y_coord()])
+# matched_points_target = np.array([target.get_x_coord(), target.get_y_coord()])
 
 # Plotting
 plt.figure(figsize=(8, 6))
@@ -158,6 +158,7 @@ for i in range(len(correspondence)):
 
 plt.xlabel('X')
 plt.ylabel('Y')
+plt.gca().invert_yaxis()
 plt.show()
 
 # predicted_target_image = displace_image(source_image, of_object.get_flow())
