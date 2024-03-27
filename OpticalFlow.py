@@ -1,4 +1,5 @@
 import cv2 as cv
+import numpy as np
 import matplotlib.pyplot as plt
 from Utility.DeNoise import denoised_image
 
@@ -31,14 +32,14 @@ class OpticalFlow:
 
         # Plot optical flow vectors on the source image
         plt.imshow(cv.cvtColor(source_img, cv.COLOR_BGR2RGB))
-        plt.quiver(range(0, self._flow.shape[1], 10),
-                   range(0, self._flow.shape[0], 10),
+        plt.quiver(range(0, self._flow.shape[0], 10),
+                   range(0, self._flow.shape[1], 10),
                    self._flow[::10, ::10, 0],  # u component of flow
-                   self._flow[::10, ::10, 1],  # v component of flow (invert y-axis)
+                   self._flow[::10, ::10, 1],  # v component of flow
                    magnitude[::10, ::10],  # magnitude of flow
                    angles='xy', scale_units='xy', scale=1, cmap='viridis')
-        plt.colorbar()  # Add color bar to indicate magnitude
+        plt.colorbar()
         plt.show()
 
     def get_flow(self):
-        return self._flow
+        return np.stack((self._flow[::, ::, 0], self._flow[::, ::, 0]), axis=-1)

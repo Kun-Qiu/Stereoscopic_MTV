@@ -12,12 +12,12 @@ def generatingDisplacement(img_size, dx, dy, mode):
     for y in range(height):
         for x in range(width):
             if mode == 'constant':
-                displacement_field[y, x] = [dx, dy]
+                displacement_field[x, y] = [dx, dy]
             elif mode == 'vortex':
                 # Calculate vortex speed based on distance from the center
                 distance_from_center = np.sqrt((x - width // 2) ** 2 + (y - height // 2) ** 2)
                 vortex_speed = 1 / (1 + distance_from_center)  # Adjusted vortex formula
-                displacement_field[y, x] = [dx * vortex_speed, dy * vortex_speed]
+                displacement_field[x, y] = [dx * vortex_speed, dy * vortex_speed]
 
     return displacement_field
 
@@ -76,11 +76,11 @@ def displace_image(input_img, min_value, max_value, mode='constant'):
 
     for y in range(height):
         for x in range(width):
-            new_x = int(x + dx[y, x])
-            new_y = int(y + dy[y, x])
+            new_x = int(x + dx[x, y])
+            new_y = int(y + dy[x, y])
 
             if 0 <= new_x < width and 0 <= new_y < height:
-                displaced_image[new_y, new_x] = image[y, x]
+                displaced_image[new_x, new_y] = image[x, y]
 
     return displacement_field, displaced_image
 
