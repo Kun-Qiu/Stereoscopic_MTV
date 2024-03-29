@@ -1,6 +1,7 @@
 import cv2
 import numpy as np
 import torch
+import torch.nn as nn
 import torch.optim as optim
 import OpticalFlow
 import TemplateMatching
@@ -79,15 +80,23 @@ def visualize_displacement(image, field):
 
 # __________________________________________________________________________________________
 
+### Linear Model that takes in a matrix of shape feature X height X width
+### Essentially performing f(Img) = img * A where A is how you want to transform img
+### By doing backprogation, we want to find A such that img * A gives you the field 
+### That you want. 
 class DisplacementFieldModel(torch.nn.Module):
-    def __init__(self, initial_guess):
+    def __init__(self):
         super(DisplacementFieldModel, self).__init__()
+        self.l1 = nn.Linear(2,2)
+        # initial_guess = torch.tensor(initial_guess, dtype=torch.float32)
+        # self.displacements = torch.nn.Parameter(initial_guess.clone().detach())
 
-        initial_guess = torch.tensor(initial_guess, dtype=torch.float32)
-        self.displacements = torch.nn.Parameter(initial_guess.clone().detach())
-
-    def forward(self):
-        return self.displacements
+    def forward(self, initial_guess):
+        #Shape of initial guess is feature x X x Y
+        guessReshape = initial_guess.reshape(initial_guess.shape[0], -1)
+        #shape of reshape is going to be feature x XY
+        prediction = self.l1(guessReshape)
+        return prediction.reshape(initial_guess.shape) #reshape it back into the original shape
 
 
 def displacement_loss(source_img, target_img, predicted_field):
@@ -138,7 +147,9 @@ def optimize_displacement_field(model, source_img, target_img, observed_displace
                                 optimizer, num_epochs=10):
     for epoch in range(num_epochs):
         # Forward pass: compute predicted displacements
-        predicted_displacement = model()
+        initial_guess = torch.rand((2, 256,256))
+        model = DisplacementFieldModel()
+        predicted_displacement = model(initial_guess)
 
         # Compute the loss
         loss_intensity = displacement_loss(source_img, target_img, predicted_displacement)
