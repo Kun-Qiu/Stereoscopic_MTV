@@ -19,14 +19,14 @@ def displace_image(image, field, tensor=False):
     height, width = image.shape[:2]
     displaced_image = np.zeros_like(image)
 
-    for y in range(height):
-        for x in range(width):
-            displacement_x, displacement_y = field[x, y]
+    for x in range(width):
+        for y in range(height):
+            displacement_x, displacement_y = field[y, x]
 
             new_x = int(x + displacement_x)
             new_y = int(y + displacement_y)
             if 0 <= new_x < width and 0 <= new_y < height:
-                displaced_image[x, y] = image[new_x, new_y]
+                displaced_image[y, x] = image[new_y, new_x]
 
     if tensor:
         return torch.tensor(displaced_image, dtype=torch.float32)
@@ -60,34 +60,80 @@ def visualize_displacement(image, field):
     :param image: Original image
     :param field: Displacement field
     """
-    # Calculate magnitude of displacement vectors
-    displacement_magnitude = np.linalg.norm(field, axis=-1)
+    field = torch.tensor(field)
+    magnitudes = torch.sqrt(torch.sum(field ** 2, dim=2, keepdim=True))
 
-    # Create quiver plot
-    plt.figure(figsize=(10, 8))
-    plt.imshow(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
+    magnitudes_numpy = magnitudes.detach().numpy()
+    field_numpy = field.detach().numpy()
 
-    plt.quiver(field[..., 0], field[..., 1], scale=10)
-    plt.imshow(displacement_magnitude, cmap='viridis', alpha=0.5)
-    plt.colorbar(label='Magnitude of Displacement')
+    length, height, color = image.shape
 
+    plt.figure(figsize=(8, 6))
+    plt.imshow(image, cmap='gray')
+
+    step = 10
+    plt.quiver(range(0, length, 10), range(0, height, 10),
+               field_numpy[::step, ::step, 0], field_numpy[::step, ::step, 1],
+               magnitudes_numpy[::step, ::step],
+               angles='xy', scale_units='xy', scale=1, cmap='viridis')
+    plt.colorbar()
     plt.title('Displacement Field Visualization')
     plt.xlabel('X')
     plt.ylabel('Y')
-    plt.show()
+    # plt.show()
+
+
+def visualize_displacement_difference(field1, field2):
+    """
+    Visualize the difference between two displacement fields using a color map
+    :param field1: First displacement field
+    :param field2: Second displacement field
+    """
+    # Compute the element-wise difference between the two displacement fields
+    diff_field = field2 - field1
+
+    # Calculate the magnitude of the difference vectors
+    magnitudes = np.sqrt(np.sum(diff_field ** 2, axis=2))
+
+    # Create a plot
+    plt.figure(figsize=(8, 6))
+
+    # Use a diverging color map to represent positive and negative differences
+    plt.imshow(magnitudes, cmap='RdBu', interpolation='nearest', origin='lower')
+
+    # Add colorbar
+    plt.colorbar(label='Magnitude of Difference')
+
+    plt.title('Displacement Field Difference Visualization')
+    plt.xlabel('X')
+    plt.ylabel('Y')
+    # plt.show()
 
 
 # __________________________________________________________________________________________
 
 class DisplacementFieldModel(torch.nn.Module):
-    def __init__(self, initial_guess):
+    def __init__(self):
         super(DisplacementFieldModel, self).__init__()
 
-        initial_guess = torch.tensor(initial_guess, dtype=torch.float32)
-        self.displacements = torch.nn.Parameter(initial_guess.clone().detach())
+        # initial_guess = torch.tensor(initial_guess, dtype=torch.float32)
 
-    def forward(self):
-        return self.displacements
+        # # Shape is 256^2 x 2
+        # flatten_guess = torch.flatten(initial_guess, start_dim=0, end_dim=1)
+        # self.displacements = torch.nn.Parameter(flatten_guess)
+
+        # Add a linear layer
+        self.linear_layer = torch.nn.Linear(in_features=2, out_features=2)
+
+    def forward(self, initial_guess):
+        init_guess_shape = initial_guess.shape
+
+        initial_guess = torch.tensor(initial_guess, dtype=torch.float32)
+        flatten_guess = torch.flatten(initial_guess, start_dim=0, end_dim=1)
+
+        prediction = self.linear_layer(flatten_guess)
+        # transformed_displacements = self.linear_layer(self.displacements)
+        return prediction.reshape(init_guess_shape)
 
 
 def displacement_loss(source_img, target_img, predicted_field):
@@ -103,7 +149,7 @@ def displacement_loss(source_img, target_img, predicted_field):
     return torch.mean(torch.square(predicted_image - target_img))
 
 
-def optical_template_displace_loss(optical_flow, template_flow, lambda_vel=0.5):
+def optical_template_displace_loss(optical_flow, template_flow, lambda_vel=0.9):
     """
     Calculation of the MSE loss function of the displacement field based on the
     difference between predicted field (optical) and the known field (template)
@@ -126,6 +172,14 @@ def optical_template_displace_loss(optical_flow, template_flow, lambda_vel=0.5):
     return lambda_vel * (squared_error / len(template_flow))
 
 
+def displacement_gradient_regularization(field):
+    grad_x = torch.gradient(field[:, :, 0], axis=1)
+    grad_y = torch.gradient(field[:, :, 1], axis=0)
+    grad_norm = torch.sqrt(grad_x ** 2 + grad_y ** 2)
+    mean_grad_norm = torch.mean(grad_norm)
+    return mean_grad_norm
+
+
 # # Function to compute total variation regularization
 # def total_variation_regularization(displacement_field):
 #     tv_loss = torch.sum(torch.abs(displacement_field[:, :, :, :-1] - displacement_field[:, :, :, 1:])) + \
@@ -134,16 +188,19 @@ def optical_template_displace_loss(optical_flow, template_flow, lambda_vel=0.5):
 
 
 # Step 3: Optimization loop
-def optimize_displacement_field(model, source_img, target_img, observed_displacement,
-                                optimizer, num_epochs=10):
+def optimize_displacement_field(model, source_img, target_img,
+                                initial_guess, observed_displacement,
+                                optimizer, num_epochs=20):
+    predicted_displacement = initial_guess
     for epoch in range(num_epochs):
         # Forward pass: compute predicted displacements
-        predicted_displacement = model()
+        predicted_displacement = model(predicted_displacement)
 
         # Compute the loss
         loss_intensity = displacement_loss(source_img, target_img, predicted_displacement)
         loss_displace = optical_template_displace_loss(predicted_displacement, observed_displacement)
         loss = loss_intensity + loss_displace
+
         print(loss, epoch)
 
         # Backward pass: compute gradient of the loss with respect to model parameters
@@ -157,6 +214,8 @@ def optimize_displacement_field(model, source_img, target_img, observed_displace
         if (epoch + 1) % 100 == 0:
             print(f'Epoch [{epoch + 1}/{num_epochs}], Loss: {loss.item()}')
 
+    return predicted_displacement
+
 
 """
 Driver Code
@@ -164,7 +223,7 @@ Driver Code
 # Load original image and displacement field (example)
 source_path = 'Data/Source/frame_0.png'
 target_path = 'Data/Target/synethetic_0.png'
-template_path = 'Data/Template/frame_1_temp.png'
+template_path = 'Data/Template/frame_0_temp.png'
 intersection = 'Data/Template/intersection.txt'
 source_image = cv2.imread(source_path)
 target_image = cv2.imread(target_path)
@@ -177,33 +236,38 @@ source = TemplateMatching.TemplateMatcher(source_path, template_path, intersecti
 target = TemplateMatching.TemplateMatcher(target_path, template_path, intersection)
 source.match_template()
 target.match_template()
+# source.visualizeMatchAfterNonMaxSuppression()
+# target.visualizeMatchAfterNonMaxSuppression()
 
-observed = correspondence_displacement(source.matching_displacement(target))
+correspondence = source.matching_displacement(target)
+observed = correspondence_displacement(correspondence)
 predicted = of_object.get_flow()
+# of_object.visualize_flow()
 
 # ----------------------- Optimization ---------------------------------------------------------------
 # Initialize your displacement field model and optimizer
-model = DisplacementFieldModel(predicted)
-optimizer = optim.Adam(model.parameters(), lr=0.1)
+model = DisplacementFieldModel()
+optimizer = optim.Adam(model.parameters(), lr=0.01)
 
 # Optimize the displacement field
-optimize_displacement_field(model, source_image, target_image,
-                            observed, optimizer)
+optimized_displacement = optimize_displacement_field(model, source_image, target_image,
+                                                     predicted, observed, optimizer)
+print(optimized_displacement)
 
-with torch.no_grad():
-    displacement_field = model().cpu().detach().numpy()
-
-visualize_displacement(source_image, displacement_field)
+visualize_displacement(source_image, optimized_displacement)
+visualize_displacement(source_image, predicted)
+# visualize_displacement_difference(optimized_displacement, predicted)
+plt.show()
 
 # matched_points_source = np.array([source.get_x_coord(), source.get_y_coord()])
 # matched_points_target = np.array([target.get_x_coord(), target.get_y_coord()])
-
-# Plotting
+#
+# # Plotting
 # plt.figure(figsize=(8, 6))
 # plt.scatter(matched_points_source[0], matched_points_source[1], c='b', label='Source Points')
 # plt.scatter(matched_points_target[0], matched_points_target[1], c='r', label='Target Points')
-
-# Plot vectors
+#
+# # Plot vectors
 # for i in range(len(correspondence)):
 #     plt.scatter(correspondence[i][0][0], correspondence[i][0][1],
 #                 color='blue', marker='o')
