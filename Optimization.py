@@ -54,10 +54,11 @@ def correspondence_displacement(correspondence_list):
     return displacement_list
 
 
-def visualize_displacement(image, field):
+def visualize_displacement(image, name, field):
     """
     Visualize the displacement vectors on top of the original image
     :param image: Original image
+    :param name: Name for the plot
     :param field: Displacement field
     """
     field = torch.tensor(field)
@@ -77,7 +78,7 @@ def visualize_displacement(image, field):
                magnitudes_numpy[::step, ::step],
                angles='xy', scale_units='xy', scale=1, cmap='viridis')
     plt.colorbar()
-    plt.title('Displacement Field Visualization')
+    plt.title(name)
     plt.xlabel('X')
     plt.ylabel('Y')
 
@@ -148,7 +149,8 @@ def optical_template_displace_loss(optical_flow, template_flow, lambda_vel=50):
     :param lambda_vel: regularizor value
     :return: The MSE loss associated with difference from predicted field to known field
     """
-    squared_error = 0
+    squared_error = torch.tensor(0, dtype=torch.float32)
+
     for x, y, dx, dy in template_flow:
         x_optical = optical_flow[x, y, 0]
         y_optical = optical_flow[x, y, 1]
@@ -158,7 +160,7 @@ def optical_template_displace_loss(optical_flow, template_flow, lambda_vel=50):
 
         squared_error += (x_diff_squared + y_diff_squared)
 
-    return lambda_vel * squared_error
+    return lambda_vel * (squared_error / len(template_flow))
 
 
 # def gradient_loss(field, lambda_grad=1):
@@ -180,15 +182,15 @@ def optical_template_displace_loss(optical_flow, template_flow, lambda_vel=50):
 
 
 def optimize_displacement_field(model, source_img, target_img, observed_displacement,
-                                optimizer, num_epochs=100):
+                                optimizer, num_epochs=10):
     predicted_displacement = None
     for epoch in range(num_epochs):
         predicted_displacement = model()
 
         predicted_displacement = predicted_displacement.view(256, 256, 2)
-        # loss_intensity = displacement_loss(source_img,
-        #                                    target_img,
-        #                                    predicted_displacement)
+        loss_intensity = displacement_loss(source_img,
+                                           target_img,
+                                           predicted_displacement)
 
         loss_displace = optical_template_displace_loss(predicted_displacement,
                                                        observed_displacement,
@@ -199,18 +201,18 @@ def optimize_displacement_field(model, source_img, target_img, observed_displace
         # print(f'inten: {loss_intensity}, vel: {loss_displace}, grad: {loss_grad}')
         # loss = loss_displace + loss_intensity + loss_grad
 
-        # print(f'inten: {loss_intensity}, vel: {loss_displace}')
-        # loss = loss_displace + loss_intensity
+        print(f'inten: {loss_intensity}, vel: {loss_displace}')
+        loss = loss_displace + loss_intensity
 
-        print(f'vel: {loss_displace}')
-        loss = loss_displace
+        # print(f'vel: {loss_displace}')
+        # loss = loss_displace
 
         loss.backward()
         optimizer.step()
         # print('gradients =', [x.grad.data for x in model.parameters()])
         for name, param in model.named_parameters():
             if param.requires_grad:
-                print(f'Parameter: {name}, Size: {param.size()}, Gradient: {param.grad.nonzero()}')
+                print(f'Parameter: {name}, Size: {len(param.grad.nonzero())}, Gradient: {param.grad.nonzero()}')
                 # print('weights after backpropagation = ', list(model.parameters()))
         optimizer.zero_grad()
         print(f'Epoch [{epoch + 1}/{num_epochs}], Loss: {loss.item()}')
@@ -253,8 +255,8 @@ optimizer = optim.Adam(model.parameters(), lr=1e-2)
 optimized_displacement = optimize_displacement_field(model, source_image, target_image,
                                                      observed, optimizer)
 
-visualize_displacement(source_image, optimized_displacement)
-visualize_displacement(source_image, predicted)
+visualize_displacement(source_image, "Optimized Displacement", optimized_displacement)
+visualize_displacement(source_image, "Initial Displacement", predicted)
 visualize_displacement_difference(optimized_displacement, predicted, source_image)
 plt.show()
 
