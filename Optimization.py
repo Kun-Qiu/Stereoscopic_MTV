@@ -5,33 +5,46 @@ import torch.optim as optim
 import OpticalFlow
 import TemplateMatching
 import matplotlib.pyplot as plt
+import torch.nn.functional as F
 
 
 # Utility Functions
-def displace_image(image, field, tensor=False):
+def displace_image(image, field):
     """
     Displace the source image by the displacement field pixel by pixel
     :param image: source image
     :param field: displacement field
-    :param tensor: whether to set return as tensor
-    :return: Displaced image (tensor or numpy.ndarray)
+    :return: Displaced image
     """
-    height, width = image.shape[:2]
-    displaced_image = np.zeros_like(image)
+    dx = field[:, :, 0]
+    dy = field[:, :, 1]
 
-    for x in range(width):
-        for y in range(height):
-            displacement_x, displacement_y = field[x, y]
+    # print(source_img_clone.shape)
+    # print(dx.shape)
+    # for x in range(width):
+    #     for y in range(height):
+    #         displacement_x, displacement_y = field[x, y]
+    #
+    #         new_x = int(x + displacement_x)
+    #         new_y = int(y + displacement_y)
+    #         if 0 <= new_x < width and 0 <= new_y < height:
+    #             displaced_image[x, y] = image[new_x, new_y]
 
-            new_x = int(x + displacement_x)
-            new_y = int(y + displacement_y)
-            if 0 <= new_x < width and 0 <= new_y < height:
-                displaced_image[x, y] = image[new_x, new_y]
+    # Create grid of coordinates
+    h, w, channel = image.size()
 
-    if tensor:
-        return torch.tensor(displaced_image, dtype=torch.float32)
+    # Create grid of coordinates
+    grid_y, grid_x = torch.meshgrid(torch.arange(0, h), torch.arange(0, w))
+    grid = torch.stack((grid_x, grid_y), dim=2).float()
 
-    return displaced_image
+    # Add displacement to grid
+    shifted_grid = grid + torch.stack((dx, dy)).permute(1, 2, 0)
+
+    # Apply bilinear interpolation
+    shifted_image = F.grid_sample(image.squeeze(0), shifted_grid, mode='bilinear', padding_mode='zeros')
+    print(shifted_image.shape)
+
+    return shifted_image.squeeze(0)
 
 
 def correspondence_displacement(correspondence_list):
@@ -122,6 +135,8 @@ class DisplacementFieldModel(torch.nn.Module):
         self.v = torch.nn.Parameter(torch.tensor(initial_guess[:, :, 1],
                                                  dtype=torch.float32,
                                                  requires_grad=True))
+        # self.u = torch.nn.Parameter(torch.zeros(256, 256, 1), requires_grad=True)
+        # self.v = torch.nn.Parameter(torch.zeros(256, 256, 1), requires_grad=True)
 
     def forward(self):
         return torch.stack((self.u, self.v), dim=-1)
@@ -136,7 +151,14 @@ def displacement_loss(source_img, target_img, predicted_field):
     :param predicted_field: predicted displacement field
     :return: The loss related to intensity difference
     """
-    predicted_image = displace_image(source_img, predicted_field, tensor=True)
+    predicted_image = displace_image(source_img, predicted_field)
+    result_np = predicted_image.detach().numpy()
+
+    # Display the image
+    plt.imshow(result_np)
+    plt.axis('off')  # Turn off axis
+    plt.show()
+
     return torch.mean(torch.square(predicted_image - target_img))
 
 
@@ -163,16 +185,17 @@ def optical_template_displace_loss(optical_flow, template_flow, lambda_vel=50):
     return lambda_vel * (squared_error / len(template_flow))
 
 
-# def gradient_loss(field, lambda_grad=1):
-#     # Compute gradients of u component with respect to x and y axes
-#
-#     du_dx = torch.tensor(np.gradient(field.detach().numpy()[:, :, 0], axis=0))
-#     du_dy = torch.tensor(np.gradient(field.detach().numpy()[:, :, 0], axis=1))
-#     dv_dx = torch.tensor(np.gradient(field.detach().numpy()[:, :, 1], axis=0))
-#     dv_dy = torch.tensor(np.gradient(field.detach().numpy()[:, :, 1], axis=1))
-#
-#     grad_norm_squared = torch.sum(du_dx ** 2 + du_dy ** 2 + dv_dx ** 2 + dv_dy ** 2)
-#     return lambda_grad * grad_norm_squared
+def gradient_loss(field, lambda_grad=1):
+    # Compute gradients of u component with respect to x and y axes
+
+    du_dx = torch.tensor(np.gradient(field.detach().numpy()[:, :, 0], axis=0))
+    du_dy = torch.tensor(np.gradient(field.detach().numpy()[:, :, 0], axis=1))
+    dv_dx = torch.tensor(np.gradient(field.detach().numpy()[:, :, 1], axis=0))
+    dv_dy = torch.tensor(np.gradient(field.detach().numpy()[:, :, 1], axis=1))
+
+    grad_norm_squared = torch.sum(du_dx ** 2 + du_dy ** 2 + dv_dx ** 2 + dv_dy ** 2)
+    return lambda_grad * grad_norm_squared
+
 
 # # Function to compute total variation regularization
 # def total_variation_regularization(displacement_field):
@@ -192,20 +215,16 @@ def optimize_displacement_field(model, source_img, target_img, observed_displace
                                            target_img,
                                            predicted_displacement)
 
-        loss_displace = optical_template_displace_loss(predicted_displacement,
-                                                       observed_displacement,
-                                                       lambda_vel=100)
+        # loss_displace = optical_template_displace_loss(predicted_displacement,
+        #                                                observed_displacement,
+        #                                                lambda_vel=50)
 
         # loss_grad = gradient_loss(predicted_displacement, lambda_grad=1)
 
         # print(f'inten: {loss_intensity}, vel: {loss_displace}, grad: {loss_grad}')
         # loss = loss_displace + loss_intensity + loss_grad
-
-        print(f'inten: {loss_intensity}, vel: {loss_displace}')
-        loss = loss_displace + loss_intensity
-
-        # print(f'vel: {loss_displace}')
-        # loss = loss_displace
+        # print(f'inten: {loss_intensity}, grad: {loss_grad}')
+        loss = loss_intensity
 
         loss.backward()
         optimizer.step()
@@ -252,7 +271,11 @@ predicted = of_object.get_flow()
 # Initialize displacement field model and optimizer
 model = DisplacementFieldModel(predicted)
 optimizer = optim.Adam(model.parameters(), lr=1e-2)
-optimized_displacement = optimize_displacement_field(model, source_image, target_image,
+
+source_image_tensor = torch.tensor(source_image, dtype=torch.float32, requires_grad=True)
+target_image_tensor = torch.tensor(target_image, dtype=torch.float32, requires_grad=True)
+optimized_displacement = optimize_displacement_field(model, source_image_tensor,
+                                                     target_image_tensor,
                                                      observed, optimizer)
 
 visualize_displacement(source_image, "Optimized Displacement", optimized_displacement)
@@ -262,12 +285,29 @@ plt.show()
 
 # matched_points_source = np.array([source.get_x_coord(), source.get_y_coord()])
 # matched_points_target = np.array([target.get_x_coord(), target.get_y_coord()])
-#
-# # Plotting
-# plt.figure(figsize=(8, 6))
+
+# Plotting
+plt.figure(figsize=(8, 6))
 # plt.scatter(matched_points_source[0], matched_points_source[1], c='b', label='Source Points')
 # plt.scatter(matched_points_target[0], matched_points_target[1], c='r', label='Target Points')
-#
+
+x_coord = []
+y_coord = []
+dx_val = []
+dy_val = []
+for x, y, dx, dy in observed:
+    x_coord.append(x)
+    y_coord.append(y)
+    dx_val.append([optimized_displacement[x, y][0].detach().numpy(), dx])
+    dy_val.append([optimized_displacement[x, y][1].detach().numpy(), dy])
+
+plt.scatter(x_coord, y_coord, c='b', label='Source Points')
+
+# Plot vectors
+for x, y, dx, dy in zip(x_coord, y_coord, dx_val, dy_val):
+    plt.arrow(x, y, dx[0], dy[0], head_width=2, head_length=4, fc='red', ec='red', label='Predicted')
+    plt.arrow(x, y, dx[1], dy[1], head_width=2, head_length=4, fc='blue', ec='blue', label='Known')
+
 # # Plot vectors
 # for i in range(len(correspondence)):
 #     plt.scatter(correspondence[i][0][0], correspondence[i][0][1],
@@ -280,4 +320,4 @@ plt.show()
 # plt.xlabel('X')
 # plt.ylabel('Y')
 # plt.gca().invert_yaxis()
-# plt.show()
+plt.show()
