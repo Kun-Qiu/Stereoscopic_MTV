@@ -9,42 +9,67 @@ import torch.nn.functional as F
 
 
 # Utility Functions
-def displace_image(image, field):
+def translateImage(image, translateField):
     """
-    Displace the source image by the displacement field pixel by pixel
-    :param image: source image
-    :param field: displacement field
-    :return: Displaced image
-    """
-    dx = field[:, :, 0]
-    dy = field[:, :, 1]
+    #     Displace the source image by the displacement field pixel by pixel
+    #     :param image: source image
+    #     :param field: displacement field
+    #     :return: Displaced image
+    #   """
+    size = [256, 256]
+    x_r = torch.arange(size[0])
+    y_r = torch.arange(size[1])
+    x_grid, y_grid = torch.meshgrid(x_r, y_r)  # create the original grid
 
-    # print(source_img_clone.shape)
-    # print(dx.shape)
-    # for x in range(width):
-    #     for y in range(height):
-    #         displacement_x, displacement_y = field[x, y]
-    #
-    #         new_x = int(x + displacement_x)
-    #         new_y = int(y + displacement_y)
-    #         if 0 <= new_x < width and 0 <= new_y < height:
-    #             displaced_image[x, y] = image[new_x, new_y]
+    field_x = translateField[:, :, 1]  # obtain the translation field for x and y independently
+    field_y = translateField[:, :, 0]
 
-    # Create grid of coordinates
-    h, w, channel = image.size()
+    translate_x = (x_grid + field_x) / size[0] * 2 - 1  # Translate the original coordinate space
+    translate_y = (y_grid - field_y) / size[1] * 2 - 1
 
-    # Create grid of coordinates
-    grid_y, grid_x = torch.meshgrid(torch.arange(0, h), torch.arange(0, w))
-    grid = torch.stack((grid_x, grid_y), dim=2).float()
+    tFieldXY = torch.stack((translate_y, translate_x)).permute(1, 2, 0).unsqueeze(0)
 
-    # Add displacement to grid
-    shifted_grid = grid + torch.stack((dx, dy)).permute(1, 2, 0)
+    img = image.permute(2, 0, 1).unsqueeze(0)
+    output = F.grid_sample(img, tFieldXY, padding_mode='zeros')
+    return output
 
-    # Apply bilinear interpolation
-    shifted_image = F.grid_sample(image.squeeze(0), shifted_grid, mode='bilinear', padding_mode='zeros')
-    print(shifted_image.shape)
 
-    return shifted_image.squeeze(0)
+# def displace_image(image, field):
+#     """
+#     Displace the source image by the displacement field pixel by pixel
+#     :param image: source image
+#     :param field: displacement field
+#     :return: Displaced image
+#     """
+#     dx = field[:, :, 0]
+#     dy = field[:, :, 1]
+#
+#     # print(source_img_clone.shape)
+#     # print(dx.shape)
+#     # for x in range(width):
+#     #     for y in range(height):
+#     #         displacement_x, displacement_y = field[x, y]
+#     #
+#     #         new_x = int(x + displacement_x)
+#     #         new_y = int(y + displacement_y)
+#     #         if 0 <= new_x < width and 0 <= new_y < height:
+#     #             displaced_image[x, y] = image[new_x, new_y]
+#
+#     # Create grid of coordinates
+#     h, w, channel = image.size()
+#
+#     # Create grid of coordinates
+#     grid_y, grid_x = torch.meshgrid(torch.arange(0, h), torch.arange(0, w))
+#     grid = torch.stack((grid_x, grid_y), dim=2).float()
+#
+#     # Add displacement to grid
+#     shifted_grid = grid + torch.stack((dx, dy)).permute(1, 2, 0)
+#
+#     # Apply bilinear interpolation
+#     shifted_image = F.grid_sample(image.squeeze(0), shifted_grid, mode='bilinear', padding_mode='zeros')
+#     print(shifted_image.shape)
+#
+#     return shifted_image.squeeze(0)
 
 
 def correspondence_displacement(correspondence_list):
@@ -151,13 +176,13 @@ def displacement_loss(source_img, target_img, predicted_field):
     :param predicted_field: predicted displacement field
     :return: The loss related to intensity difference
     """
-    predicted_image = displace_image(source_img, predicted_field)
-    result_np = predicted_image.detach().numpy()
-
-    # Display the image
-    plt.imshow(result_np)
-    plt.axis('off')  # Turn off axis
-    plt.show()
+    predicted_image = translateImage(source_img, predicted_field).squeeze().permute(1,2,0)
+    # result_np = predicted_image.detach().numpy()
+    #
+    # # Display the image
+    # plt.imshow(result_np)
+    # plt.axis('off')  # Turn off axis
+    # plt.show()
 
     return torch.mean(torch.square(predicted_image - target_img))
 
@@ -205,7 +230,7 @@ def gradient_loss(field, lambda_grad=1):
 
 
 def optimize_displacement_field(model, source_img, target_img, observed_displacement,
-                                optimizer, num_epochs=10):
+                                optimizer, num_epochs=2000):
     predicted_displacement = None
     for epoch in range(num_epochs):
         predicted_displacement = model()
