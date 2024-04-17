@@ -13,10 +13,12 @@ def translateImage(image, translateField):
     """
     #     Displace the source image by the displacement field pixel by pixel
     #     :param image: source image
-    #     :param field: displacement field
+    #     :param translateField: displacement field
     #     :return: Displaced image
     #   """
-    size = [256, 256]
+    length, width, channel = image.shape
+
+    size = [length, width]
     x_r = torch.arange(size[0])
     y_r = torch.arange(size[1])
     x_grid, y_grid = torch.meshgrid(x_r, y_r)  # create the original grid
@@ -32,44 +34,6 @@ def translateImage(image, translateField):
     img = image.permute(2, 0, 1).unsqueeze(0)
     output = F.grid_sample(img, tFieldXY, padding_mode='zeros')
     return output
-
-
-# def displace_image(image, field):
-#     """
-#     Displace the source image by the displacement field pixel by pixel
-#     :param image: source image
-#     :param field: displacement field
-#     :return: Displaced image
-#     """
-#     dx = field[:, :, 0]
-#     dy = field[:, :, 1]
-#
-#     # print(source_img_clone.shape)
-#     # print(dx.shape)
-#     # for x in range(width):
-#     #     for y in range(height):
-#     #         displacement_x, displacement_y = field[x, y]
-#     #
-#     #         new_x = int(x + displacement_x)
-#     #         new_y = int(y + displacement_y)
-#     #         if 0 <= new_x < width and 0 <= new_y < height:
-#     #             displaced_image[x, y] = image[new_x, new_y]
-#
-#     # Create grid of coordinates
-#     h, w, channel = image.size()
-#
-#     # Create grid of coordinates
-#     grid_y, grid_x = torch.meshgrid(torch.arange(0, h), torch.arange(0, w))
-#     grid = torch.stack((grid_x, grid_y), dim=2).float()
-#
-#     # Add displacement to grid
-#     shifted_grid = grid + torch.stack((dx, dy)).permute(1, 2, 0)
-#
-#     # Apply bilinear interpolation
-#     shifted_image = F.grid_sample(image.squeeze(0), shifted_grid, mode='bilinear', padding_mode='zeros')
-#     print(shifted_image.shape)
-#
-#     return shifted_image.squeeze(0)
 
 
 def correspondence_displacement(correspondence_list):
@@ -160,34 +124,51 @@ class DisplacementFieldModel(torch.nn.Module):
         self.v = torch.nn.Parameter(torch.tensor(initial_guess[:, :, 1],
                                                  dtype=torch.float32,
                                                  requires_grad=True))
-        # self.u = torch.nn.Parameter(torch.zeros(256, 256, 1), requires_grad=True)
-        # self.v = torch.nn.Parameter(torch.zeros(256, 256, 1), requires_grad=True)
 
     def forward(self):
         return torch.stack((self.u, self.v), dim=-1)
 
 
-def displacement_loss(source_img, target_img, predicted_field):
+def smoothness_constraint(u, v):
+    """
+    Smoothness constraint for the field based on Horn Schunck's algorithm
+    :param u: u component of displacement field
+    :param v: v component of displacement field
+    :return: loss based on the gradient across x and y for u and v
+    """
+    # Calculate squared differences
+    du_x = u[:, :-1] - u[:, 1:]  # Difference on row elements
+    du_y = u[:-1, :] - u[1:, :]  # Difference on column elements
+
+    dv_x = v[:, :-1] - v[:, 1:]  # Difference on row elements
+    dv_y = v[:-1, :] - v[1:, :]  # Difference on column elements
+
+    # Pad the missing element for all four gradient to obtain 256 x 256 tensor
+    du_x = F.pad(du_x, (0, 1), mode='constant', value=0)
+    du_y = F.pad(du_y, (0, 0, 0, 1), mode='constant', value=0)
+    dv_x = F.pad(dv_x, (0, 1), mode='constant', value=0)
+    dv_y = F.pad(dv_y, (0, 0, 0, 1), mode='constant', value=0)
+
+    # Sum squared differences
+    smoothness_loss = 0.25 * torch.sum(du_x ** 2 + du_y ** 2 + dv_x ** 2 + dv_y ** 2)
+    return smoothness_loss
+
+
+def intensity_constraint(source_img, target_img, predicted_field, lambda_intensity=10):
     """
     Calculation of the loss function of the displacement field based on the
     intensity difference
     :param source_img: source image
     :param target_img: target image
     :param predicted_field: predicted displacement field
+    :param lambda_intensity: regularizor coefficient for the intensity loss
     :return: The loss related to intensity difference
     """
-    predicted_image = translateImage(source_img, predicted_field).squeeze().permute(1,2,0)
-    # result_np = predicted_image.detach().numpy()
-    #
-    # # Display the image
-    # plt.imshow(result_np)
-    # plt.axis('off')  # Turn off axis
-    # plt.show()
-
-    return torch.mean(torch.square(predicted_image - target_img))
+    predicted_image = translateImage(source_img, predicted_field).squeeze().permute(1, 2, 0)
+    return lambda_intensity * torch.sum(torch.square(predicted_image - target_img))
 
 
-def optical_template_displace_loss(optical_flow, template_flow, lambda_vel=50):
+def known_displace_constraint(optical_flow, template_flow, lambda_vel=50):
     """
     Calculation of the MSE loss function of the displacement field based on the
     difference between predicted field (optical) and the known field (template)
@@ -196,7 +177,7 @@ def optical_template_displace_loss(optical_flow, template_flow, lambda_vel=50):
     :param lambda_vel: regularizor value
     :return: The MSE loss associated with difference from predicted field to known field
     """
-    squared_error = torch.tensor(0, dtype=torch.float32)
+    squared_error = 0
 
     for x, y, dx, dy in template_flow:
         x_optical = optical_flow[x, y, 0]
@@ -210,18 +191,6 @@ def optical_template_displace_loss(optical_flow, template_flow, lambda_vel=50):
     return lambda_vel * (squared_error / len(template_flow))
 
 
-def gradient_loss(field, lambda_grad=1):
-    # Compute gradients of u component with respect to x and y axes
-
-    du_dx = torch.tensor(np.gradient(field.detach().numpy()[:, :, 0], axis=0))
-    du_dy = torch.tensor(np.gradient(field.detach().numpy()[:, :, 0], axis=1))
-    dv_dx = torch.tensor(np.gradient(field.detach().numpy()[:, :, 1], axis=0))
-    dv_dy = torch.tensor(np.gradient(field.detach().numpy()[:, :, 1], axis=1))
-
-    grad_norm_squared = torch.sum(du_dx ** 2 + du_dy ** 2 + dv_dx ** 2 + dv_dy ** 2)
-    return lambda_grad * grad_norm_squared
-
-
 # # Function to compute total variation regularization
 # def total_variation_regularization(displacement_field):
 #     tv_loss = torch.sum(torch.abs(displacement_field[:, :, :, :-1] - displacement_field[:, :, :, 1:])) + \
@@ -230,36 +199,33 @@ def gradient_loss(field, lambda_grad=1):
 
 
 def optimize_displacement_field(model, source_img, target_img, observed_displacement,
-                                optimizer, num_epochs=2000):
+                                optimizer, num_epochs=1000):
     predicted_displacement = None
     for epoch in range(num_epochs):
         predicted_displacement = model()
 
+        u_displacement = predicted_displacement[:, :, 0]
+        v_displacement = predicted_displacement[:, :, 1]
+
         predicted_displacement = predicted_displacement.view(256, 256, 2)
-        loss_intensity = displacement_loss(source_img,
-                                           target_img,
-                                           predicted_displacement)
+        loss_intensity = intensity_constraint(source_img,
+                                              target_img,
+                                              predicted_displacement)
 
-        # loss_displace = optical_template_displace_loss(predicted_displacement,
-        #                                                observed_displacement,
-        #                                                lambda_vel=50)
+        loss_displace = known_displace_constraint(predicted_displacement,
+                                                  observed_displacement,
+                                                  lambda_vel=10)
 
-        # loss_grad = gradient_loss(predicted_displacement, lambda_grad=1)
+        loss_smooth = smoothness_constraint(u_displacement,
+                                            v_displacement)
 
-        # print(f'inten: {loss_intensity}, vel: {loss_displace}, grad: {loss_grad}')
-        # loss = loss_displace + loss_intensity + loss_grad
-        # print(f'inten: {loss_intensity}, grad: {loss_grad}')
-        loss = loss_intensity
+        print(f'smooth: {loss_smooth}, inten: {loss_intensity}, vel: {loss_displace}')
+        loss = loss_smooth + loss_intensity + loss_displace
 
         loss.backward()
         optimizer.step()
-        # print('gradients =', [x.grad.data for x in model.parameters()])
-        for name, param in model.named_parameters():
-            if param.requires_grad:
-                print(f'Parameter: {name}, Size: {len(param.grad.nonzero())}, Gradient: {param.grad.nonzero()}')
-                # print('weights after backpropagation = ', list(model.parameters()))
         optimizer.zero_grad()
-        print(f'Epoch [{epoch + 1}/{num_epochs}], Loss: {loss.item()}')
+        # print(f'Epoch [{epoch + 1}/{num_epochs}], Loss: {loss.item()}')
 
     return predicted_displacement
 
