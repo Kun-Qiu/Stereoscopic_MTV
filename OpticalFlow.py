@@ -18,7 +18,7 @@ class OpticalFlow:
         # Calculate optical flow
         self._flow = cv.calcOpticalFlowFarneback(source_img, target_img, None,
                                                  pyr_scale=0.5,
-                                                 levels=5,
+                                                 levels=3,
                                                  winsize=15,
                                                  iterations=10,
                                                  poly_n=7,
@@ -35,11 +35,11 @@ class OpticalFlow:
         plt.quiver(range(0, self._flow.shape[0], 10),
                    range(0, self._flow.shape[1], 10),
                    self._flow[::10, ::10, 0],  # u component of flow
-                   self._flow[::10, ::10, 1],  # v component of flow
+                   -1 * self._flow[::10, ::10, 1],  # v component of flow
                    magnitude[::10, ::10],  # magnitude of flow
                    angles='xy', scale_units='xy', scale=1, cmap='viridis')
         plt.colorbar()
         plt.show()
 
     def get_flow(self):
-        return np.stack((self._flow[::, ::, 0], self._flow[::, ::, 0]), axis=-1)
+        return np.stack((self._flow[:, :, 0], -1 * self._flow[:, :, 1]), axis=-1)

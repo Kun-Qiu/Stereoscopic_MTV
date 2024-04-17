@@ -117,7 +117,6 @@ def visualize_displacement_difference(field1, field2, image):
 class DisplacementFieldModel(torch.nn.Module):
     def __init__(self, initial_guess):
         super(DisplacementFieldModel, self).__init__()
-
         self.u = torch.nn.Parameter(torch.tensor(initial_guess[:, :, 0],
                                                  dtype=torch.float32,
                                                  requires_grad=True))
@@ -154,7 +153,7 @@ def smoothness_constraint(u, v):
     return smoothness_loss
 
 
-def intensity_constraint(source_img, target_img, predicted_field, lambda_intensity=10):
+def intensity_constraint(source_img, target_img, predicted_field, lambda_intensity=10.0):
     """
     Calculation of the loss function of the displacement field based on the
     intensity difference
@@ -168,7 +167,7 @@ def intensity_constraint(source_img, target_img, predicted_field, lambda_intensi
     return lambda_intensity * torch.mean(torch.square(predicted_image - target_img))
 
 
-def known_displace_constraint(optical_flow, template_flow, lambda_vel=50):
+def known_displace_constraint(optical_flow, template_flow, lambda_vel=10.0):
     """
     Calculation of the MSE loss function of the displacement field based on the
     difference between predicted field (optical) and the known field (template)
@@ -199,9 +198,12 @@ def known_displace_constraint(optical_flow, template_flow, lambda_vel=50):
 
 
 def optimize_displacement_field(model, source_img, target_img, observed_displacement,
-                                optimizer, num_epochs=1000):
+                                optimizer, num_epochs=10000):
     predicted_displacement = None
-    for epoch in range(num_epochs):
+    epoch = 0
+    converged = False
+    prevLoss = 0
+    while epoch < num_epochs and not converged:
         predicted_displacement = model()
 
         u_displacement = predicted_displacement[:, :, 0]
@@ -211,22 +213,28 @@ def optimize_displacement_field(model, source_img, target_img, observed_displace
         loss_intensity = intensity_constraint(source_img,
                                               target_img,
                                               predicted_displacement,
-                                              lambda_intensity=1)
+                                              lambda_intensity=10)
 
         loss_displace = known_displace_constraint(predicted_displacement,
                                                   observed_displacement,
-                                                  lambda_vel=100)
+                                                  lambda_vel=200)
 
         loss_smooth = smoothness_constraint(u_displacement,
                                             v_displacement)
 
-        print(f'smooth: {loss_smooth}, inten: {loss_intensity}, vel: {loss_displace}')
+        # print(f'smooth: {loss_smooth}, inten: {loss_intensity}, vel: {loss_displace}')
         loss = loss_smooth + loss_intensity + loss_displace
+
+        if abs(loss - prevLoss) < 0.01:
+            converged = True
+        else:
+            prevLoss = loss
 
         loss.backward()
         optimizer.step()
         optimizer.zero_grad()
-        # print(f'Epoch [{epoch + 1}/{num_epochs}], Loss: {loss.item()}')
+        epoch = epoch + 1
+        print(f'Epoch [{epoch + 1}/{num_epochs}], Loss: {loss.item()}')
 
     return predicted_displacement
 
@@ -236,7 +244,7 @@ Driver Code
 """
 # Load original image and displacement field (example)
 source_path = 'Data/Source/frame_0.png'
-target_path = 'Data/Target/synethetic_0.png'
+target_path = 'Data/Target/frame_0_2us.png'
 template_path = 'Data/Template/frame_0_temp.png'
 intersection = 'Data/Template/intersection.txt'
 source_image = cv2.imread(source_path)
@@ -278,11 +286,11 @@ plt.show()
 # matched_points_source = np.array([source.get_x_coord(), source.get_y_coord()])
 # matched_points_target = np.array([target.get_x_coord(), target.get_y_coord()])
 
-# Plotting
+# # Plotting
 # plt.figure(figsize=(8, 6))
-# plt.scatter(matched_points_source[0], matched_points_source[1], c='b', label='Source Points')
-# plt.scatter(matched_points_target[0], matched_points_target[1], c='r', label='Target Points')
-
+# # plt.scatter(matched_points_source[0], matched_points_source[1], c='b', label='Source Points')
+# # plt.scatter(matched_points_target[0], matched_points_target[1], c='r', label='Target Points')
+#
 # x_coord = []
 # y_coord = []
 # dx_val = []
@@ -294,22 +302,22 @@ plt.show()
 #     dy_val.append([optimized_displacement[x, y][1].detach().numpy(), dy])
 #
 # plt.scatter(x_coord, y_coord, c='b', label='Source Points')
-
+#
 # # Plot vectors
 # for x, y, dx, dy in zip(x_coord, y_coord, dx_val, dy_val):
 #     plt.arrow(x, y, dx[0], dy[0], head_width=2, head_length=4, fc='red', ec='red', label='Predicted')
 #     plt.arrow(x, y, dx[1], dy[1], head_width=2, head_length=4, fc='blue', ec='blue', label='Known')
-
-# # Plot vectors
-# for i in range(len(correspondence)):
-#     plt.scatter(correspondence[i][0][0], correspondence[i][0][1],
-#                 color='blue', marker='o')
-#     plt.arrow(correspondence[i][0][0], correspondence[i][0][1],
-#               correspondence[i][1][0] - correspondence[i][0][0],
-#               correspondence[i][1][1] - correspondence[i][0][1],
-#               head_width=2, head_length=4, fc='red', ec='red')
+#
+# # # Plot vectors
+# # for i in range(len(correspondence)):
+# #     plt.scatter(correspondence[i][0][0], correspondence[i][0][1],
+# #                 color='blue', marker='o')
+# #     plt.arrow(correspondence[i][0][0], correspondence[i][0][1],
+# #               correspondence[i][1][0] - correspondence[i][0][0],
+# #               correspondence[i][1][1] - correspondence[i][0][1],
+# #               head_width=2, head_length=4, fc='red', ec='red')
 #
 # plt.xlabel('X')
 # plt.ylabel('Y')
 # plt.gca().invert_yaxis()
-plt.show()
+# plt.show()

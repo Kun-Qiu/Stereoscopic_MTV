@@ -121,7 +121,7 @@ if __name__ == "__main__":
     """
     Argument parsing --> Driver code 
     Example terminal command -> 
-    python Template.py path_to_image path_to template --multi image_scale
+    python \Template.py path_to_image path_to template --multi image_scale
     """
     parser = argparse.ArgumentParser(description='Draw lines on an image')
     parser.add_argument('image_path', type=str, help='Path to the input image file')
