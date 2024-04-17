@@ -165,7 +165,7 @@ def intensity_constraint(source_img, target_img, predicted_field, lambda_intensi
     :return: The loss related to intensity difference
     """
     predicted_image = translateImage(source_img, predicted_field).squeeze().permute(1, 2, 0)
-    return lambda_intensity * torch.sum(torch.square(predicted_image - target_img))
+    return lambda_intensity * torch.mean(torch.square(predicted_image - target_img))
 
 
 def known_displace_constraint(optical_flow, template_flow, lambda_vel=50):
@@ -210,11 +210,12 @@ def optimize_displacement_field(model, source_img, target_img, observed_displace
         predicted_displacement = predicted_displacement.view(256, 256, 2)
         loss_intensity = intensity_constraint(source_img,
                                               target_img,
-                                              predicted_displacement)
+                                              predicted_displacement,
+                                              lambda_intensity=1)
 
         loss_displace = known_displace_constraint(predicted_displacement,
                                                   observed_displacement,
-                                                  lambda_vel=10)
+                                                  lambda_vel=100)
 
         loss_smooth = smoothness_constraint(u_displacement,
                                             v_displacement)
@@ -278,26 +279,26 @@ plt.show()
 # matched_points_target = np.array([target.get_x_coord(), target.get_y_coord()])
 
 # Plotting
-plt.figure(figsize=(8, 6))
+# plt.figure(figsize=(8, 6))
 # plt.scatter(matched_points_source[0], matched_points_source[1], c='b', label='Source Points')
 # plt.scatter(matched_points_target[0], matched_points_target[1], c='r', label='Target Points')
 
-x_coord = []
-y_coord = []
-dx_val = []
-dy_val = []
-for x, y, dx, dy in observed:
-    x_coord.append(x)
-    y_coord.append(y)
-    dx_val.append([optimized_displacement[x, y][0].detach().numpy(), dx])
-    dy_val.append([optimized_displacement[x, y][1].detach().numpy(), dy])
+# x_coord = []
+# y_coord = []
+# dx_val = []
+# dy_val = []
+# for x, y, dx, dy in observed:
+#     x_coord.append(x)
+#     y_coord.append(y)
+#     dx_val.append([optimized_displacement[x, y][0].detach().numpy(), dx])
+#     dy_val.append([optimized_displacement[x, y][1].detach().numpy(), dy])
+#
+# plt.scatter(x_coord, y_coord, c='b', label='Source Points')
 
-plt.scatter(x_coord, y_coord, c='b', label='Source Points')
-
-# Plot vectors
-for x, y, dx, dy in zip(x_coord, y_coord, dx_val, dy_val):
-    plt.arrow(x, y, dx[0], dy[0], head_width=2, head_length=4, fc='red', ec='red', label='Predicted')
-    plt.arrow(x, y, dx[1], dy[1], head_width=2, head_length=4, fc='blue', ec='blue', label='Known')
+# # Plot vectors
+# for x, y, dx, dy in zip(x_coord, y_coord, dx_val, dy_val):
+#     plt.arrow(x, y, dx[0], dy[0], head_width=2, head_length=4, fc='red', ec='red', label='Predicted')
+#     plt.arrow(x, y, dx[1], dy[1], head_width=2, head_length=4, fc='blue', ec='blue', label='Known')
 
 # # Plot vectors
 # for i in range(len(correspondence)):
