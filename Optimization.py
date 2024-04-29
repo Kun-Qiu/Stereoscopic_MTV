@@ -142,7 +142,7 @@ def smoothness_constraint(u, v):
     dv_x = v[:, :-1] - v[:, 1:]  # Difference on row elements
     dv_y = v[:-1, :] - v[1:, :]  # Difference on column elements
 
-    # Pad the missing element for all four gradient to obtain 256 x 256 tensor
+    # Pad the missing element for all four gradient to obtain n x n tensor
     du_x = F.pad(du_x, (0, 1), mode='constant', value=0)
     du_y = F.pad(du_y, (0, 0, 0, 1), mode='constant', value=0)
     dv_x = F.pad(dv_x, (0, 1), mode='constant', value=0)
@@ -213,11 +213,11 @@ def optimize_displacement_field(model, source_img, target_img, observed_displace
         loss_intensity = intensity_constraint(source_img,
                                               target_img,
                                               predicted_displacement,
-                                              lambda_intensity=10)
+                                              lambda_intensity=15.5)
 
         loss_displace = known_displace_constraint(predicted_displacement,
                                                   observed_displacement,
-                                                  lambda_vel=200)
+                                                  lambda_vel=275)
 
         loss_smooth = smoothness_constraint(u_displacement,
                                             v_displacement)
@@ -225,7 +225,7 @@ def optimize_displacement_field(model, source_img, target_img, observed_displace
         # print(f'smooth: {loss_smooth}, inten: {loss_intensity}, vel: {loss_displace}')
         loss = loss_smooth + loss_intensity + loss_displace
 
-        if abs(loss - prevLoss) < 0.01:
+        if abs(loss - prevLoss) < 0.001:
             converged = True
         else:
             prevLoss = loss
