@@ -7,6 +7,7 @@ optimization of the project of a predicted 3D field onto the two stereoscopic vi
 - `cv2`: OpenCV library for image processing
 - `numpy`: Numerical computing library
 - `torch`: PyTorch deep learning library
+- `vtk`: Visualization Toolkit for Virtual Cameras
 
 ## Displacement Field Model
 
