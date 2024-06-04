@@ -103,29 +103,48 @@ def create_anaglyph(left_image, right_image):
     return anaglyph_image
 
 
+def apply_velocity_field_to_points(points, velocity_field):
+    num_points = points.GetNumberOfPoints()
+    for i in range(num_points):
+        x, y, z = points.GetPoint(i)
+        # Assuming velocity field is a function vel(x, y, z) -> (vx, vy, vz)
+        vx, vy, vz = velocity_field(x, y, z)
+        points.SetPoint(i, x + vx, y + vy, z + vz)
+
+
+def velocity_field(x, y, z):
+    # Simple example: shift everything by 5 units in the x and y direction
+    vx = 5
+    vy = 5
+    vz = 0
+    return vx, vy, vz
+
+
 # Main function
 def main():
     num_lines = 20
     angle = 30  # Angle of the grid lines in degrees
 
     polydata = create_gridlines(num_lines, angle)
-    actor = create_actor(polydata)
 
+    # Apply velocity field to the points
+    points = polydata.GetPoints()
+    apply_velocity_field_to_points(points, velocity_field)
+
+    actor = create_actor(polydata)
     renderer = create_renderer(actor)
     render_window = create_render_window(renderer)
 
-    # Create two cameras, 100 degrees apart
+    # Create two cameras, positioned as in the diagram
     camera_left = vtk.vtkCamera()
-    camera_left.SetPosition(10, 10, 10)
+    camera_left.SetPosition(-10, 0, 10)
     camera_left.SetFocalPoint(0, 0, 0)
-    camera_left.SetViewUp(0, 0, 1)
-    camera_left.Azimuth(50)  # Example azimuth angle
+    camera_left.SetViewUp(0, 1, 0)
 
     camera_right = vtk.vtkCamera()
-    camera_right.SetPosition(10, 10, 10)
+    camera_right.SetPosition(10, 0, 10)
     camera_right.SetFocalPoint(0, 0, 0)
-    camera_right.SetViewUp(0, 0, 1)
-    camera_right.Azimuth(150)  # Example azimuth angle + 100 degrees
+    camera_right.SetViewUp(0, 1, 0)
 
     # Render left view
     renderer.SetActiveCamera(camera_left)
