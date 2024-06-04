@@ -190,15 +190,19 @@ def known_displace_constraint(optical_flow, template_flow, lambda_vel=10.0):
     return lambda_vel * (squared_error / len(template_flow))
 
 
-# # Function to compute total variation regularization
-# def total_variation_regularization(displacement_field):
-#     tv_loss = torch.sum(torch.abs(displacement_field[:, :, :, :-1] - displacement_field[:, :, :, 1:])) + \
-#               torch.sum(torch.abs(displacement_field[:, :, :-1, :] - displacement_field[:, :, 1:, :]))
-#     return tv_loss
-
-
 def optimize_displacement_field(model, source_img, target_img, observed_displacement,
                                 optimizer, num_epochs=10000):
+    """
+    The main training cycle for finding the solution that minimize the loss
+    :param model: model
+    :param source_img: image @ t=0
+    :param target_img: image @ t=dt
+    :param observed_displacement: initial velocity field
+    :param optimizer: optimizer
+    :param num_epochs: number of epoch
+    :return: optimized velocity field
+    """
+
     predicted_displacement = None
     epoch = 0
     converged = False
@@ -222,7 +226,6 @@ def optimize_displacement_field(model, source_img, target_img, observed_displace
         loss_smooth = smoothness_constraint(u_displacement,
                                             v_displacement)
 
-        # print(f'smooth: {loss_smooth}, inten: {loss_intensity}, vel: {loss_displace}')
         loss = loss_smooth + loss_intensity + loss_displace
 
         if abs(loss - prevLoss) < 0.001:
