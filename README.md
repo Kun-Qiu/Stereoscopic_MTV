@@ -1,25 +1,12 @@
-# Project 2D Image to Stereoscopic Views
+# 3D Velocity Field Approximation Using Stereoscopic Vision
 
-This code project a 2D image onto two image planes for stereoscopic image viewing.
+This project enables the extraction of 3D velocity field from two sets of images from a stereoscopic setup using 
+optimization of the project of a predicted 3D field onto the two stereoscopic views.
 
 ## Dependencies
 - `cv2`: OpenCV library for image processing
 - `numpy`: Numerical computing library
 - `torch`: PyTorch deep learning library
-- `torch.optim`: PyTorch optimization module
-- `OpticalFlow`: Custom module for optical flow computation
-- `TemplateMatching`: Custom module for template matching
-- `matplotlib.pyplot`: Plotting library
-
-## Utility Functions
-
-1. `translateImage(image, translateField)`: This function applies a displacement field to an input image, effectively translating the image pixels.
-
-2. `correspondence_displacement(correspondence_list)`: This function takes a list of correspondences between initial and final points, and computes the displacement (dx, dy) for each correspondence.
-
-3. `visualize_displacement(image, name, field)`: This function visualizes the displacement vectors on top of the original image.
-
-4. `visualize_displacement_difference(field1, field2, image)`: This function visualizes the difference between two displacement fields overlayed on the original image.
 
 ## Displacement Field Model
 
