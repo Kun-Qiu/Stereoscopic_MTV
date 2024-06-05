@@ -7,6 +7,30 @@ ImageLineDrawer is a class use to determine the
 template image for the template matching
 """
 
+"""
+Utility Function
+"""
+
+
+def correspondence_displacement(correspondence_list):
+    """
+    Given a corresponding array that match one point to another, determines
+    the displacement dx and dy from the initial point
+    :param correspondence_list: List containing correspondence between two initial and final position
+    :return: A list that contain the dx and dy
+    """
+    displacement_list = []
+    for match in correspondence_list:
+        initial_point = match[0]
+        final_point = match[1]
+
+        dx = final_point[0] - initial_point[0]
+        dy = final_point[1] - initial_point[1]
+
+        displacement_list.append([initial_point[0], initial_point[1], dx, dy])
+
+    return displacement_list
+
 
 class ImageLineDrawer:
     def __init__(self, image_path, size_multiplier):

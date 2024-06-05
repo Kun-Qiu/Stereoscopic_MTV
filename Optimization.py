@@ -1,118 +1,14 @@
 import cv2
-import numpy as np
 import torch
 import torch.optim as optim
 import OpticalFlow
 import TemplateMatching
 import matplotlib.pyplot as plt
 import torch.nn.functional as F
+from Utility import Visualization as vis
+from Utility.generateDisplacedImage import translateImage
+from Utility.Template import correspondence_displacement
 
-
-# Utility Functions
-def translateImage(image, translateField):
-    """
-    #     Displace the source image by the displacement field pixel by pixel
-    #     :param image: source image
-    #     :param translateField: displacement field
-    #     :return: Displaced image
-    #   """
-    length, width, channel = image.shape
-
-    size = [length, width]
-    x_r = torch.arange(size[0])
-    y_r = torch.arange(size[1])
-    x_grid, y_grid = torch.meshgrid(x_r, y_r)  # create the original grid
-
-    field_x = translateField[:, :, 1]  # obtain the translation field for x and y independently
-    field_y = translateField[:, :, 0]
-
-    translate_x = (x_grid + field_x) / size[0] * 2 - 1  # Translate the original coordinate space
-    translate_y = (y_grid - field_y) / size[1] * 2 - 1
-
-    tFieldXY = torch.stack((translate_y, translate_x)).permute(1, 2, 0).unsqueeze(0)
-
-    img = image.permute(2, 0, 1).unsqueeze(0)
-    output = F.grid_sample(img, tFieldXY, padding_mode='zeros')
-    return output
-
-
-def correspondence_displacement(correspondence_list):
-    """
-    Given a corresponding array that match one point to another, determines
-    the displacement dx and dy from the initial point
-    :param correspondence_list: List containing correspondence between two initial and final position
-    :return: A list that contain the dx and dy
-    """
-    displacement_list = []
-    for match in correspondence_list:
-        initial_point = match[0]
-        final_point = match[1]
-
-        dx = final_point[0] - initial_point[0]
-        dy = final_point[1] - initial_point[1]
-
-        displacement_list.append([initial_point[0], initial_point[1], dx, dy])
-
-    return displacement_list
-
-
-def visualize_displacement(image, name, field):
-    """
-    Visualize the displacement vectors on top of the original image
-    :param image: Original image
-    :param name: Name for the plot
-    :param field: Displacement field
-    """
-    field = torch.tensor(field)
-    magnitudes = torch.sqrt(torch.sum(field ** 2, dim=2))
-
-    magnitudes_numpy = magnitudes.detach().numpy()
-    field_numpy = field.detach().numpy()
-
-    length, height, color = image.shape
-
-    plt.figure(figsize=(8, 6))
-    plt.imshow(image, cmap='gray')
-
-    step = 10
-    plt.quiver(range(0, length, 10), range(0, height, 10),
-               field_numpy[::step, ::step, 0], field_numpy[::step, ::step, 1],
-               magnitudes_numpy[::step, ::step],
-               angles='xy', scale_units='xy', scale=1, cmap='viridis')
-    plt.colorbar()
-    plt.title(name)
-    plt.xlabel('X')
-    plt.ylabel('Y')
-
-
-def visualize_displacement_difference(field1, field2, image):
-    """
-    Visualize the difference between two displacement fields overlayed on the original image
-    :param field1: First displacement field
-    :param field2: Second displacement field
-    :param image: Image data
-    """
-    # Compute the difference field
-    if torch.is_tensor(field1):
-        field1 = field1.detach().numpy()
-    if torch.is_tensor(field2):
-        field2 = field2.detach().numpy()
-    diff_field = field2 - field1
-
-    # Compute magnitudes
-    magnitudes = np.sqrt(np.sum(diff_field ** 2, axis=2))
-
-    # Plot the magnitude differences overlayed on the original image
-    plt.figure(figsize=(8, 6))
-    plt.imshow(image)
-    plt.imshow(magnitudes, cmap='RdBu', alpha=0.5, interpolation='nearest', origin='lower')
-    plt.colorbar(label='Magnitude of Difference')
-    plt.title('Displacement Field Difference Overlayed on Image')
-    plt.axis('off')
-    plt.gca().invert_yaxis()
-
-
-# __________________________________________________________________________________________
 
 class DisplacementFieldModel(torch.nn.Module):
     def __init__(self, initial_guess):
@@ -281,9 +177,9 @@ optimized_displacement = optimize_displacement_field(model, source_image_tensor,
                                                      target_image_tensor,
                                                      observed, optimizer)
 
-visualize_displacement(source_image, "Optimized Displacement", optimized_displacement)
-visualize_displacement(source_image, "Initial Displacement", predicted)
-visualize_displacement_difference(optimized_displacement, predicted, source_image)
+vis.visualize_displacement(source_image, "Optimized Displacement", optimized_displacement)
+vis.visualize_displacement(source_image, "Initial Displacement", predicted)
+vis.visualize_displacement_difference(optimized_displacement, predicted, source_image)
 plt.show()
 
 # matched_points_source = np.array([source.get_x_coord(), source.get_y_coord()])
