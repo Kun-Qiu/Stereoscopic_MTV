@@ -1,6 +1,15 @@
 import vtk
 import numpy as np
 from PIL import Image
+import math
+
+
+def calculate_camera_position(focal_point, view_angle, distance):
+    angle_radians = math.radians(view_angle)
+    camera_x = distance * math.cos(angle_radians / 2)
+    camera_y = distance * math.sin(angle_radians / 2)
+    camera_position = [focal_point[0] + camera_x, focal_point[1] - camera_y, focal_point[2]]
+    return camera_position
 
 
 def create_gridlines(num_lines, angle):
@@ -47,6 +56,32 @@ def create_gridlines(num_lines, angle):
     return polydata
 
 
+def find_intersections(polydata):
+    points = polydata.GetPoints()
+    num_points = points.GetNumberOfPoints()
+    intersections = vtk.vtkPoints()
+
+    for i in range(0, num_points, 4):
+        for j in range(i + 4, num_points, 4):
+            x1, y1, _ = points.GetPoint(i)
+            x2, y2, _ = points.GetPoint(i + 1)
+            x3, y3, _ = points.GetPoint(j)
+            x4, y4, _ = points.GetPoint(j + 1)
+
+            denom = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4)
+            if denom != 0:
+                px = ((x1 * y2 - y1 * x2) * (x3 - x4) - (x1 - x2) * (x3 * y4 - y3 * x4)) / denom
+                py = ((x1 * y2 - y1 * x2) * (y3 - y4) - (y1 - y2) * (x3 * y4 - y3 * x4)) / denom
+
+                if min(x1, x2) <= px <= max(x1, x2) \
+                        and min(y1, y2) <= py <= max(y1, y2) \
+                        and min(x3, x4) <= px <= max(x3, x4) \
+                        and min(y3, y4) <= py <= max(y3, y4):
+                    intersections.InsertNextPoint(px, py, 0)
+
+    return intersections
+
+
 def create_actor(polydata):
     # Create a mapper
     mapper = vtk.vtkPolyDataMapper()
@@ -57,6 +92,25 @@ def create_actor(polydata):
     actor.SetMapper(mapper)
     actor.GetProperty().SetLineWidth(2)
     actor.GetProperty().SetColor(0, 0, 1)  # Set color to blue
+
+    return actor
+
+
+def create_intersection_actor(points):
+    polydata = vtk.vtkPolyData()
+    polydata.SetPoints(points)
+
+    vertex_glyph_filter = vtk.vtkVertexGlyphFilter()
+    vertex_glyph_filter.SetInputData(polydata)
+    vertex_glyph_filter.Update()
+
+    mapper = vtk.vtkPolyDataMapper()
+    mapper.SetInputData(vertex_glyph_filter.GetOutput())
+
+    actor = vtk.vtkActor()
+    actor.SetMapper(mapper)
+    actor.GetProperty().SetColor(1, 0, 0)  # Set color to red
+    actor.GetProperty().SetPointSize(5)  # Set point size
 
     return actor
 
@@ -74,7 +128,7 @@ def create_render_window(renderer):
     # Create a render window
     render_window = vtk.vtkRenderWindow()
     render_window.AddRenderer(renderer)
-    render_window.SetSize(400, 400)
+    render_window.SetSize(512, 512)
 
     return render_window
 
@@ -122,47 +176,77 @@ def velocity_field(x, y, z):
 
 # Main function
 def main():
-    num_lines = 20
-    angle = 30  # Angle of the grid lines in degrees
+    num_lines = 11
+    angle = 45  # Angle of the grid lines in degrees
+    focal_point = [0, 0, 0]
+    view_angle = 50
+    distance_to_focal = 10
 
     polydata = create_gridlines(num_lines, angle)
-
-    # Apply velocity field to the points
     points = polydata.GetPoints()
-    apply_velocity_field_to_points(points, velocity_field)
 
-    actor = create_actor(polydata)
-    renderer = create_renderer(actor)
+    # Find intersections
+    intersection_points = find_intersections(polydata)
+
+    # Create actors
+    grid_actor = create_actor(polydata)
+    intersection_actor = create_intersection_actor(intersection_points)
+
+    # Create renderer and render window
+    renderer = create_renderer(grid_actor)
+    renderer.AddActor(intersection_actor)
     render_window = create_render_window(renderer)
 
-    # Create two cameras, positioned as in the diagram
+    camera_left_position = calculate_camera_position(focal_point, view_angle, distance_to_focal)
+    camera_right_position = calculate_camera_position(focal_point, view_angle, distance_to_focal)
+
+    # Create cameras
     camera_left = vtk.vtkCamera()
-    camera_left.SetPosition(-10, 0, 10)
-    camera_left.SetFocalPoint(0, 0, 0)
+    camera_left.SetPosition(camera_left_position)
+    camera_left.SetFocalPoint(focal_point)
     camera_left.SetViewUp(0, 1, 0)
+    camera_left.SetViewAngle(view_angle)
 
     camera_right = vtk.vtkCamera()
-    camera_right.SetPosition(10, 0, 10)
-    camera_right.SetFocalPoint(0, 0, 0)
+    camera_right.SetPosition(camera_right_position)
+    camera_right.SetFocalPoint(focal_point)
     camera_right.SetViewUp(0, 1, 0)
+    camera_right.SetViewAngle(view_angle)
 
-    # Render left view
+    # Render left and right views before applying the velocity field
     renderer.SetActiveCamera(camera_left)
     render_window.Render()
-    save_rendered_view(render_window, 'left_view.png')
+    save_rendered_view(render_window, 'left_view_before.png')
 
-    # Render right view
     renderer.SetActiveCamera(camera_right)
     render_window.Render()
-    save_rendered_view(render_window, 'right_view.png')
+    save_rendered_view(render_window, 'right_view_before.png')
+
+    # Apply velocity field to the points
+    apply_velocity_field_to_points(points, velocity_field)
+
+    # Render left and right views after applying the velocity field
+    renderer.SetActiveCamera(camera_left)
+    render_window.Render()
+    save_rendered_view(render_window, 'left_view_after.png')
+
+    renderer.SetActiveCamera(camera_right)
+    render_window.Render()
+    save_rendered_view(render_window, 'right_view_after.png')
 
     # Open the saved images
-    left_image = Image.open('left_view.png')
-    right_image = Image.open('right_view.png')
+    left_image_before = Image.open('left_view_before.png')
+    right_image_before = Image.open('right_view_before.png')
+    left_image_after = Image.open('left_view_after.png')
+    right_image_after = Image.open('right_view_after.png')
 
-    # Create anaglyph image
-    anaglyph_image = create_anaglyph(left_image, right_image)
-    anaglyph_image.show()
+    # Create anaglyph images
+    anaglyph_image_before = create_anaglyph(left_image_before, right_image_before)
+    anaglyph_image_after = create_anaglyph(left_image_after, right_image_after)
+
+    # Show anaglyph images
+    anaglyph_image_before.show()
+    anaglyph_image_after.show()
 
 
 if __name__ == "__main__":
