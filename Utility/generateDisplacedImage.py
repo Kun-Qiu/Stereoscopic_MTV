@@ -14,7 +14,7 @@ def generatingDisplacement(img_size, dx, dy, mode):
     for y in range(height):
         for x in range(width):
             if mode == 'constant':
-                displacement_field[x, y] = [dx, dy]
+                displacement_field[x, y] = [dy, dx]
             elif mode == 'vortex':
                 # Calculate vortex speed based on distance from the center
                 distance_from_center = np.sqrt((x - width // 2) ** 2 + (y - height // 2) ** 2)
@@ -26,13 +26,13 @@ def generatingDisplacement(img_size, dx, dy, mode):
 
 def display_displacement_field(displacement_field, subsampling_factor=10):
     # Extract displacement components
-    dx_plot = displacement_field[:, :, 0]
+    dx_plot = displacement_field[:, :, 1]
 
     """
     Due to the coordinate system start from top left on an image,
     y displacement need to be inverted
     """
-    dy_plot = -1 * displacement_field[:, :, 1]
+    dy_plot = -1 * displacement_field[:, :, 0]
 
     magnitude = np.sqrt(dx_plot ** 2 + dy_plot ** 2)
 
@@ -64,6 +64,7 @@ def display_displacement_field(displacement_field, subsampling_factor=10):
     plt.show()
 
 
+# Could not be used with PyTorch
 def displace_image(input_img, min_value, max_value, mode='constant'):
     image = cv2.imread(input_img)
     height, width, channels = image.shape
@@ -87,6 +88,7 @@ def displace_image(input_img, min_value, max_value, mode='constant'):
     return displacement_field, displaced_image
 
 
+# Used for PyTorch
 def translateImage(image, translateField):
     """
     Displace the source image by the displacement field pixel by pixel
