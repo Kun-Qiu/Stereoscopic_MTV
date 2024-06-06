@@ -20,46 +20,31 @@ class TemplateMatcher:
         self._matchedYCoordPreNMS = []
         self._matchedXCoordPostNMS = []
         self._matchedYCoordPostNMS = []
-        self._scaledIntersection = []
 
-    def match_template(self, scale_num=1):
+    def match_template(self):
         """
         Main driver for template matching using openCV
         Since float is being converted into int for the intersections, the error accumulates
         exponentially as the scale_num increase
         :return: None
         """
-        gray_source = self._source
-        if len(self._source.shape) == 3:
-            gray_source = cv2.cvtColor(self._source, cv2.COLOR_BGR2GRAY)
+        gray_source = cv2.cvtColor(self._source, cv2.COLOR_BGR2GRAY) \
+            if len(self._source.shape) == 3 else self._source
 
-        _, img_thresh = cv2.threshold(gray_source, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-        temp_gray = cv2.cvtColor(self._template, cv2.COLOR_BGR2GRAY)
+        img_blur = cv2.GaussianBlur(gray_source, (5, 5), 0)
+        _, img_thresh = cv2.threshold(img_blur, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+        gray_template = cv2.cvtColor(self._template, cv2.COLOR_BGR2GRAY)
 
-        for iteration in range(scale_num):
-            scale = 1 - 0.1 * iteration
+        match = cv2.matchTemplate(image=img_thresh,
+                                  templ=gray_template,
+                                  method=cv2.TM_CCOEFF_NORMED)
 
-            new_height = int((1 - scale) * temp_gray.shape[0] / 2)
-            new_width = int((1 - scale) * temp_gray.shape[1] / 2)
-
-            # Crop the image from both sides
-            scaled_template = temp_gray[new_height:(temp_gray.shape[0] - new_height),
-                              new_width:(temp_gray.shape[1] - new_width)]
-
-            match = cv2.matchTemplate(image=img_thresh,
-                                      templ=scaled_template,
-                                      method=cv2.TM_CCOEFF_NORMED)
-
-            intersection_point = [self._intersection[0] - new_width,
-                                  self._intersection[1] - new_height]
-
-            # Minimum correlation threshold
-            thresh = 0.6
-            temp_y, temp_x = np.where(match >= thresh)
-            for i in range(len(temp_y)):
-                self._matchedYCoordPreNMS.append(temp_y[i])
-                self._matchedXCoordPreNMS.append(temp_x[i])
-                self._scaledIntersection.append(intersection_point)
+        # Minimum correlation threshold
+        thresh = 0.5
+        temp_y, temp_x = np.where(match >= thresh)
+        for i in range(len(temp_y)):
+            self._matchedYCoordPreNMS.append(temp_y[i])
+            self._matchedXCoordPreNMS.append(temp_x[i])
 
         self.NonMaxSuppression()
 
@@ -71,16 +56,14 @@ class TemplateMatcher:
         clone = self._source.copy()
         print("[INFO] {} matched locations *before* NMS".format(len(self._matchedYCoordPreNMS)))
 
-        count = 0
         for (x, y) in zip(self._matchedXCoordPreNMS, self._matchedYCoordPreNMS):
-            cv2.circle(clone, (int(x + self._scaledIntersection[count][0]),
-                               int(y + self._scaledIntersection[count][1])),
+            cv2.circle(clone, (int(x + self._intersection[0]),
+                               int(y + self._intersection[1])),
                        2, (0, 255, 0), -1)
-            count += 1
         cv2.imshow("Before NMS", clone)
         cv2.waitKey(0)
 
-    def NonMaxSuppression(self, dx=2 / 3):
+    def NonMaxSuppression(self, dx=2/3):
         """
         Reduce the amount of overlapping points in the template matching process
         :param dx: size of the rectangle to check for overlap
@@ -97,14 +80,11 @@ class TemplateMatcher:
         pick = non_max_suppression(np.array(rects))
         print("[INFO] {} matched locations *after* NMS".format(len(pick)))
 
-        count = 0
         for (startX, startY, endX, endY) in pick:
-            x_inter = int(startX + self._scaledIntersection[count][0])
-            y_inter = int(startY + self._scaledIntersection[count][1])
+            x_inter = int(startX + self._intersection[0])
+            y_inter = int(startY + self._intersection[1])
             self._matchedXCoordPostNMS.append(x_inter)
             self._matchedYCoordPostNMS.append(y_inter)
-
-            count += 1
 
     def visualizeMatchAfterNonMaxSuppression(self):
         """
