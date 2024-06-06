@@ -20,8 +20,64 @@ class TemplateMatcher:
         self._matchedYCoordPreNMS = []
         self._matchedXCoordPostNMS = []
         self._matchedYCoordPostNMS = []
+        self._boundary = []
+
+    def set_boundary(self):
+        points = []
+        img_clone = self._source.copy()
+
+        def pick(event, x, y, flags, param):
+            nonlocal points
+            if event == cv2.EVENT_LBUTTONDOWN:
+                points.append((x, y))
+                cv2.circle(img_clone, (x, y), 3, (0, 255, 0), -1)
+                cv2.imshow("image", img_clone)
+
+        cv2.imshow("image", img_clone)
+        cv2.setMouseCallback("image", pick)
+
+        while True:
+            key = cv2.waitKey(1) & 0xFF
+            if key == ord("q"):  # press 'q' to quit picking points
+                self._boundary = points
+                break
+        cv2.destroyAllWindows()
+
+    def is_point_in_polygon(self, polygon, point):
+        """
+        Determine if a point is inside a given polygon using the Ray-Casting algorithm.
+
+        :param polygon: List of tuples [(x1, y1), (x2, y2), ..., (x6, y6)] representing the vertices of the hexagon.
+        :param point: Tuple (x, y) representing the point to check.
+        :return: True if the point is inside the polygon, False otherwise.
+        """
+        n = len(polygon)
+        x, y = point
+        inside = False
+
+        p1x, p1y = polygon[0]
+        for i in range(n + 1):
+            p2x, p2y = polygon[i % n]
+            if y > min(p1y, p2y):
+                if y <= max(p1y, p2y):
+                    if x <= max(p1x, p2x):
+                        if p1y != p2y:
+                            xinters = (y - p1y) * (p2x - p1x) / (p2y - p1y) + p1x
+                        if p1x == p2x or x <= xinters:
+                            inside = not inside
+            p1x, p1y = p2x, p2y
+
+        return inside
+
+    def spatial_validation(self):
+        valid_points = []
+        for (x, y) in zip(self._matchedXCoordPostNMS, self._matchedYCoordPostNMS):
+            if self.is_point_in_polygon(self._boundary, [x, y]):
+                valid_points.append([x, y])
+        return valid_points
 
     def match_template(self):
+
         """
         Main driver for template matching using openCV
         Since float is being converted into int for the intersections, the error accumulates
@@ -63,7 +119,7 @@ class TemplateMatcher:
         cv2.imshow("Before NMS", clone)
         cv2.waitKey(0)
 
-    def NonMaxSuppression(self, dx=2/3):
+    def NonMaxSuppression(self, dx=2 / 3):
         """
         Reduce the amount of overlapping points in the template matching process
         :param dx: size of the rectangle to check for overlap
@@ -74,7 +130,7 @@ class TemplateMatcher:
         rects = []
 
         for (x, y) in zip(self._matchedXCoordPreNMS, self._matchedYCoordPreNMS):
-            rects.append((x, y, x + dx * W, y + dx * H))
+            rects.append((x, y, x + dx * H, y + dx * W))
 
         # apply non-maxima suppression to the rectangles
         pick = non_max_suppression(np.array(rects))
@@ -136,6 +192,9 @@ class TemplateMatcher:
     def get_length(self):
         return self._intersection[2]
 
+    def get_boundary(self):
+        return self._boundary
+
 
 def main():
     parser = argparse.ArgumentParser(description="Template Matching")
@@ -148,8 +207,10 @@ def main():
     Sample visualization of the result of template matching on the image
     """
     matcher = TemplateMatcher(args.source_image, args.template, args.intersection)
+    matcher.set_boundary()
     matcher.match_template()
     matcher.visualizeMatchBeforeNMS()
+    matcher.spatial_validation()
     matcher.visualizeMatchAfterNonMaxSuppression()
     cv2.destroyAllWindows()
 
