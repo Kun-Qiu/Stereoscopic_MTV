@@ -3,6 +3,8 @@ Contains functions to check if a points lies within a
 polygon given its vertices
 
 Assumption: Polygon is a convex polygon with no holes
+
+Code partially taken from Ray Casting Algorithm by Computer Geekery
 """
 import math
 
@@ -79,6 +81,11 @@ class Polygon:
         return edge_list
 
     def contains(self, point):
+        """
+        Determine if the point is on or inside the polygon
+        :param point: Test point
+        :return: Boolean on whether the point satisfy the requirement
+        """
         import sys
         # _huge is used to act as infinity if we divide by 0
         # _eps is used to make sure points are not on the same line as vertices
