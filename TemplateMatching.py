@@ -90,8 +90,8 @@ class TemplateMatcher:
                                int(y + self._intersection[1])),
                        2, (0, 255, 0), -1)
 
-        cv2.namedWindow("image", cv2.WINDOW_NORMAL)
-        cv2.resizeWindow("image", 800, 600)
+        cv2.namedWindow("Before NMS", cv2.WINDOW_NORMAL)
+        cv2.resizeWindow("Before NMS", 800, 600)
         cv2.imshow("Before NMS", clone)
         cv2.waitKey(0)
 
@@ -130,8 +130,8 @@ class TemplateMatcher:
         for i in range(len(self._matchedXCoordPostNMS)):
             cv2.circle(clone, (self._matchedXCoordPostNMS[i], self._matchedYCoordPostNMS[i]),
                        2, (0, 255, 0), -1)
-        cv2.namedWindow("image", cv2.WINDOW_NORMAL)
-        cv2.resizeWindow("image", 800, 600)
+        cv2.namedWindow("After NMS", cv2.WINDOW_NORMAL)
+        cv2.resizeWindow("After NMS", 800, 600)
         cv2.imshow("After NMS", clone)
         cv2.waitKey(0)
 
@@ -170,6 +170,20 @@ class TemplateMatcher:
 
     def get_length(self):
         return self._intersection[2]
+
+    def get_boundary(self):
+        return self._polygon
+
+    def run(self):
+        """
+        Run function for the template matching
+        :return: None
+        """
+        self.set_boundary()
+        self.match_template()
+        self.visualizeMatchBeforeNMS()
+        self.visualizeMatchAfterNonMaxSuppression()
+        cv2.destroyAllWindows()
 
 
 def main():
