@@ -5,6 +5,7 @@ import argparse
 import Utility.Polygon as pl
 import Utility.Template as tm
 import matplotlib.pyplot as plt
+import copy
 
 
 def match_template(image, template, intersection, polygon, dx=2 / 3):
@@ -29,15 +30,15 @@ def match_template(image, template, intersection, polygon, dx=2 / 3):
     img_blur = cv2.GaussianBlur(gray_source, (5, 5), 0)
     _, img_thresh = cv2.threshold(img_blur, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
 
-    template_blur = cv2.GaussianBlur(gray_template, (5, 5), 0)
-    _, template_thresh = cv2.threshold(template_blur, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    # template_blur = cv2.GaussianBlur(gray_template, (5, 5), 0)
+    _, template_thresh = cv2.threshold(gray_template, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
 
     match = cv2.matchTemplate(image=img_thresh,
                               templ=template_thresh,
                               method=cv2.TM_CCOEFF_NORMED)
 
     # Minimum correlation threshold
-    thresh = 0.4
+    thresh = 0.35
     temp_y, temp_x = np.where(match >= thresh)
 
     for (x, y) in zip(temp_x, temp_y):
@@ -45,9 +46,8 @@ def match_template(image, template, intersection, polygon, dx=2 / 3):
 
     # Apply non-maxima suppression to the rectangles
     pick = non_max_suppression(np.array(rects))
-    print("[INFO] {} matched locations *after* NMS".format(len(pick)))
-
     inter_pos = []
+
     for (startX, startY, endX, endY) in pick:
         x_inter = int(startX + intersection[0])
         y_inter = int(startY + intersection[1])
@@ -55,6 +55,29 @@ def match_template(image, template, intersection, polygon, dx=2 / 3):
             inter_pos.append((x_inter, y_inter))
 
     return inter_pos
+
+
+def moving_average_validation(vectors, m, n, threshold=2.0):
+    validated_vectors = np.copy(vectors)
+    rows, cols = vectors.shape[:2]
+    for i in range(rows):
+        for j in range(cols):
+            neighborhood = vectors[max(0, i - m):min(rows, i + m + 1), max(0, j - n):min(cols, j + n + 1)]
+            avg_vector = np.mean(neighborhood, axis=(0, 1))
+            if np.linalg.norm(vectors[i, j] - avg_vector) > threshold * np.linalg.norm(avg_vector):
+                validated_vectors[i, j] = avg_vector
+    return validated_vectors
+
+
+def average_filter(vectors, m, n):
+    smoothed_vectors = np.copy(vectors)
+    rows, cols = vectors.shape[:2]
+    for i in range(rows):
+        for j in range(cols):
+            neighborhood = vectors[max(0, i - m):min(rows, i + m + 1), max(0, j - n):min(cols, j + n + 1)]
+            avg_vector = np.mean(neighborhood, axis=(0, 1))
+            smoothed_vectors[i, j] = avg_vector
+    return smoothed_vectors
 
 
 class TemplateMatcher:
@@ -78,7 +101,7 @@ class TemplateMatcher:
         if template_path is not None or intersection_path is not None:
             self._template = cv2.imread(template_path)
         else:
-            template_object = tm.Template(source_image_path, 2)
+            template_object = tm.Template(source_image_path)
             template = template_object.run()
             self._template = template[0]
             self._intersection = template[1]
@@ -90,12 +113,6 @@ class TemplateMatcher:
         """
         self._source_points = None
         self._target_points = None
-
-        # self._matchedXCoordPreNMS = []
-        # self._matchedYCoordPreNMS = []
-        # self._matchedXCoordPostNMS = []
-        # self._matchedYCoordPostNMS = []
-
         self._polygon = None
 
     def set_boundary(self):
@@ -113,12 +130,12 @@ class TemplateMatcher:
             if event == cv2.EVENT_LBUTTONDOWN:
                 points.append(pl.Point(x, y))
                 cv2.circle(img_clone, (x, y), 3, (0, 255, 0), -1)
-                cv2.imshow("image", img_clone)
+                cv2.imshow("Boundary", img_clone)
 
-        cv2.namedWindow("image", cv2.WINDOW_NORMAL)
-        cv2.resizeWindow("image", 800, 600)
-        cv2.imshow("image", img_clone)
-        cv2.setMouseCallback("image", pick)
+        cv2.namedWindow("Boundary", cv2.WINDOW_NORMAL)
+        cv2.resizeWindow("Boundary", 600, 600)
+        cv2.imshow("Boundary", img_clone)
+        cv2.setMouseCallback("Boundary", pick)
 
         while True:
             key = cv2.waitKey(1) & 0xFF
@@ -128,66 +145,68 @@ class TemplateMatcher:
 
         return pl.Polygon(points)
 
-    def visualize_match(self, source_points, target_points):
+    def visualize_match(self, source_points, target_points, source_correspondence):
         """
-        Visualize the match after NMS
+        Visualize the displacement
         :param source_points: List of tuples [(x, y), (x1, y1), ...] representing source points
         :param target_points: List of tuples [(x, y), (x1, y1), ...] representing target points
+        :param source_correspondence: List of tuples that represents the displacement
         :return: None
         """
 
-        # Convert the image from BGR to RGB (since OpenCV loads images in BGR)
-        image_rgb = cv2.cvtColor(self._source, cv2.COLOR_BGR2RGB)
-
         # Create a plot
         plt.figure(figsize=(10, 8))
-        plt.imshow(image_rgb)
+        plt.imshow(self._source)
 
         # Plot the source points
-        if source_points:
-            source_x, source_y = zip(*source_points)
-            plt.scatter(source_x, source_y, c='red', label='Source Points', s=40, edgecolor='black')
+        source_x = [point[0] for point in source_points]
+        source_y = [point[1] for point in source_points]
+        plt.scatter(source_x, source_y, c='red', label='Source Points', s=40, edgecolor='black')
 
         # Plot the target points
-        if target_points:
-            target_x, target_y = zip(*target_points)
-            plt.scatter(target_x, target_y, c='blue', label='Target Points', s=40, edgecolor='black')
+        target_x = [point[0] for point in target_points]
+        target_y = [point[1] for point in target_points]
+        plt.scatter(target_x, target_y, c='blue', label='Target Points', s=40, edgecolor='black')
 
-        # Add a legend
+        # Plot vectors with validation
+        for correspondence in source_correspondence:
+            start_point = correspondence[0]
+            plt.arrow(start_point[0], start_point[1], correspondence[1], correspondence[2],
+                      head_width=2, head_length=4, fc='red', ec='red')
+
         plt.legend()
-
-        # Show the plot
         plt.title("Approximation of the intersection position")
-        plt.axis('off')  # Hide the axes
+        plt.axis('off')
         plt.show()
 
-    # def matching_displacement(self, source, target):
-    #     """
-    #     Find the correspondence between two set of intersection points
-    #     on the image
-    #     :param source: Intersections within the source image
-    #     :param target: Intersections within the target image
-    #     :return: A correspondence between the intersection points
-    #     """
-    #     distance_thresh = 0.25 * self.get_length()
-    #
-    #     # Construct arrays of coordinates for each point
-    #     source = np.column_stack((self._matchedXCoordPostNMS,
-    #                               self._matchedYCoordPostNMS))
-    #     target = np.column_stack((target.get_x_coord(),
-    #                               target.get_y_coord()))
-    #
-    #     correspondence = []
-    #     for x in source:
-    #         dist_x = []
-    #         for y in target:
-    #             dist_x.append(np.sqrt((y[0] - x[0]) ** 2 + (y[1] - x[1]) ** 2))
-    #
-    #         min_index = np.argmin(dist_x)  # Find the minimum distance for the current source point
-    #         if dist_x[min_index] < distance_thresh:
-    #             correspondence.append([x, target[min_index]])
-    #
-    #     return correspondence
+    def correspondence_position(self, source, target):
+        """
+        Find the correspondence between two set of intersection points
+        on the image
+        :param source: Intersections within the source image
+        :param target: Intersections within the target image
+        :return: A correspondence between the intersection points
+        """
+
+        distance_thresh = 0.5 * self.get_length()
+        target_tmp = copy.deepcopy(target)
+
+        correspondence = []
+        for source_point in source:
+            dist_source = []
+            for target_point in target_tmp:
+                dist_source.append(np.sqrt((target_point[0] - source_point[0]) ** 2 +
+                                           (target_point[1] - source_point[1]) ** 2))
+
+            # Find the minimum distance for the current source point
+            min_index = np.argmin(dist_source)
+            if dist_source[min_index] <= distance_thresh:
+                x_displace = target_tmp[min_index][0] - source_point[0]
+                y_displace = target_tmp[min_index][1] - source_point[1]
+                correspondence.append((source_point, x_displace, y_displace))
+                target_tmp.pop(min_index)
+
+        return correspondence
 
     def match_template_driver(self):
         """
@@ -198,91 +217,19 @@ class TemplateMatcher:
         self._source_points = match_template(self._source, self._template,
                                              self._intersection, self._polygon)
         self._target_points = match_template(self._target, self._template,
-                                             self._intersection, self._template)
+                                             self._intersection, self._polygon)
 
-        self.visualize_match(self._source_points, self._target_points)
+        if not self._source_points or not self._target_points:
+            print("No points detected in source or target.")
 
-    # def visualizeMatchBeforeNMS(self):
-    #     """
-    #     Visualize the match before NMS
-    #     :return: Visualize the match
-    #     """
-    #     clone = self._source.copy()
-    #     print("[INFO] {} matched locations *before* NMS".format(len(self._matchedYCoordPreNMS)))
-    #
-    #     for (x, y) in zip(self._matchedXCoordPreNMS, self._matchedYCoordPreNMS):
-    #         cv2.circle(clone, (int(x + self._intersection[0]),
-    #                            int(y + self._intersection[1])),
-    #                    2, (0, 255, 0), -1)
-    #
-    #     cv2.namedWindow("Before NMS", cv2.WINDOW_NORMAL)
-    #     cv2.resizeWindow("Before NMS", 800, 600)
-    #     cv2.imshow("Before NMS", clone)
-    #     cv2.waitKey(0)
-
-    # def NonMaxSuppression(self, dx=2 / 3):
-    #     """
-    #     Reduce the amount of overlapping points in the template matching process
-    #     :param dx: size of the rectangle to check for overlap
-    #     :return: None
-    #     """
-    #
-    #     W, H = self._template.shape[:2]
-    #     rects = []
-    #
-    #     for (x, y) in zip(self._matchedXCoordPreNMS, self._matchedYCoordPreNMS):
-    #         rects.append((x, y, x + dx * H, y + dx * W))
-    #
-    #     # apply non-maxima suppression to the rectangles
-    #     pick = non_max_suppression(np.array(rects))
-    #     print("[INFO] {} matched locations *after* NMS".format(len(pick)))
-    #
-    #     for (startX, startY, endX, endY) in pick:
-    #         x_inter = int(startX + self._intersection[0])
-    #         y_inter = int(startY + self._intersection[1])
-    #         if self._polygon.contains(pl.Point(x_inter, y_inter)):
-    #             self._matchedXCoordPostNMS.append(x_inter)
-    #             self._matchedYCoordPostNMS.append(y_inter)
-
-    # def visualizeMatchAfterNonMaxSuppression(self, source_points, target_points):
-    #     """
-    #     Visualize the match after NMS
-    #     :param source_points
-    #     :param target_points
-    #     :return: None
-    #     """
-    #
-    #     clone = self._source.copy()
-    #     for i in range(len(self._matchedXCoordPostNMS)):
-    #         cv2.circle(clone, (self._matchedXCoordPostNMS[i], self._matchedYCoordPostNMS[i]),
-    #                    2, (0, 255, 0), -1)
-    #     cv2.namedWindow("After NMS", cv2.WINDOW_NORMAL)
-    #     cv2.resizeWindow("After NMS", 800, 600)
-    #     cv2.imshow("After NMS", clone)
-    #     cv2.waitKey(0)
-
-    # def get_x_coord(self):
-    #     return self._matchedXCoordPostNMS
-    #
-    # def get_y_coord(self):
-    #     return self._matchedYCoordPostNMS
+        displacement_field = self.correspondence_position(self._source_points, self._target_points)
+        self.visualize_match(self._source_points, self._target_points, displacement_field)
 
     def get_length(self):
         return self._intersection[2]
 
     def get_boundary(self):
         return self._polygon
-
-    # def run(self):
-    #     """
-    #     Run function for the template matching
-    #     :return: None
-    #     """
-    #     self.set_boundary()
-    #     self.match_template()
-    #     self.visualizeMatchBeforeNMS()
-    #     self.visualizeMatchAfterNonMaxSuppression()
-    #     cv2.destroyAllWindows()
 
 
 def main():
@@ -298,10 +245,7 @@ def main():
     """
     matcher = TemplateMatcher(args.source_image, args.target_image,
                               args.template, args.intersection)
-    matcher.set_boundary()
     matcher.match_template_driver()
-    # matcher.visualizeMatchBeforeNMS()
-    # matcher.visualizeMatchAfterNonMaxSuppression()
     cv2.destroyAllWindows()
 
 

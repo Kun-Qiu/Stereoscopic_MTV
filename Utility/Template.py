@@ -12,27 +12,7 @@ Static Utility Function
 """
 
 
-def correspondence_displacement(correspondence_list):
-    """
-    Given a corresponding array that match one point to another, determines
-    the displacement dx and dy from the initial point
-    :param correspondence_list: List containing correspondence between two initial and final position
-    :return: A list that contain the dx and dy
-    """
-    displacement_list = []
-    for match in correspondence_list:
-        initial_point = match[0]
-        final_point = match[1]
-
-        dx = final_point[0] - initial_point[0]
-        dy = final_point[1] - initial_point[1]
-
-        displacement_list.append([initial_point[0], initial_point[1], dx, dy])
-
-    return displacement_list
-
-
-def obtain_line(img, pt1, pt2, color=(0, 255, 0), thickness=4):
+def obtain_line(img, pt1, pt2, color=(0, 255, 0), thickness=2):
     """
     Using the OpenCV line function, a line is drawn on the input image
     :param img: image
@@ -46,11 +26,9 @@ def obtain_line(img, pt1, pt2, color=(0, 255, 0), thickness=4):
 
 
 class Template:
-    def __init__(self, image_path, size_multiplier=2):
+    def __init__(self, image_path):
         self.image = cv2.imread(image_path)
-        self.resized_image = cv2.resize(self.image, (0, 0), fx=size_multiplier, fy=size_multiplier)
         self.points = []
-        self.multiplier = size_multiplier
 
     def user_prompted_points(self):
         """
@@ -60,15 +38,21 @@ class Template:
         """
         print("Please pick four points on the image by clicking on them. Press 'q' to quit.")
 
+        source_img_copy = self.image.copy()
+
         def mouse_callback(event, x, y, flags, param):
             if event == cv2.EVENT_LBUTTONDOWN:
                 self.points.append((x, y))
+                cv2.circle(source_img_copy, (x, y), 3, (0, 255, 0), -1)
+                cv2.imshow("Template", source_img_copy)
                 if len(self.points) == 4:
                     cv2.destroyAllWindows()
                 print(x, y)
 
-        cv2.imshow('Image', self.resized_image)
-        cv2.setMouseCallback('Image', mouse_callback)
+        cv2.namedWindow("Template", cv2.WINDOW_NORMAL)
+        cv2.resizeWindow("Template", 600, 600)
+        cv2.imshow('Template', source_img_copy)
+        cv2.setMouseCallback('Template', mouse_callback)
         cv2.waitKey(0)
         cv2.destroyAllWindows()
 
@@ -79,7 +63,7 @@ class Template:
         :return: None
         """
         self.user_prompted_points()
-        copied_image = self.resized_image.copy()
+        copied_image = self.image.copy()
 
         obtain_line(copied_image,
                     self.points[0],
@@ -89,20 +73,18 @@ class Template:
                     self.points[2],
                     self.points[3])
 
-        cv2.imshow('Final Image', copied_image)
+        cv2.namedWindow("Line Template", cv2.WINDOW_NORMAL)
+        cv2.resizeWindow("Line Template", 600, 600)
+        cv2.imshow("Line Template", copied_image)
         cv2.waitKey(0)
         cv2.destroyAllWindows()
 
     def save_lines_image(self):
-        # def save_lines_image(self, image_path):
         """
         Draw the lines on the image, crop the desired section for template,
         save the intersection point.
         :return: [Template, Intersection Position]
         """
-
-        # gray_img = cv2.cvtColor(self.resized_image, cv2.COLOR_RGB2GRAY)
-        # _, img_thresh = cv2.threshold(gray_img, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
 
         min_x = min(self.points[0][0], self.points[1][0], self.points[2][0], self.points[3][0])
         max_x = max(self.points[0][0], self.points[1][0], self.points[2][0], self.points[3][0])
@@ -114,19 +96,12 @@ class Template:
                                (self.points[0][1] - self.points[1][1]) ** 2)
 
         inter_x, inter_y = self.find_intersection()
-        intersection_point_relative = np.array([int((inter_x - min_x) / self.multiplier),
-                                                int((inter_y - min_y) / self.multiplier),
-                                                int(length)])
+        intersection_point_relative = np.array([(inter_x - min_x),
+                                                (inter_y - min_y),
+                                                length])
 
         # Crop the image to the bounding box
-        cropped_image = cv2.resize(self.resized_image[min_y:max_y, min_x:max_x],
-                                   (0, 0), fx=1 / self.multiplier, fy=1 / self.multiplier)
-
-        # # Writing the template to the Template Folder
-        # cv2.imwrite(image_path, cropped_image)
-        # np.savetxt('Data/Template/intersection.txt', intersection_point_relative)
-        # print(f"Region of the image overlapping with lines saved as {image_path}")
-
+        cropped_image = self.image[min_y:max_y, min_x:max_x]
         return [cropped_image, intersection_point_relative]
 
     def find_intersection(self):
@@ -144,16 +119,17 @@ class Template:
                          ((x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4))
         intersection_y = ((x1 * y2 - y1 * x2) * (y3 - y4) - (y1 - y2) * (x3 * y4 - y3 * x4)) / \
                          ((x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4))
-        return int(intersection_x), int(intersection_y)
+        # return int(intersection_x), int(intersection_y)
+        return intersection_x, intersection_y
 
     def run(self):
         """
         Run the necessary function to generate the template and the
         intersection points
-        :return: None
+        :return: [Template, Intersection Points]
         """
         self.draw_lines_on_image()
-        self.save_lines_image()
+        return self.save_lines_image()
 
 
 if __name__ == "__main__":
@@ -165,9 +141,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Draw lines on an image')
     parser.add_argument('image_path', type=str, help='Path to the input image file')
     parser.add_argument('save_path', type=str, help='Path to save image')
-    parser.add_argument('--multi', type=float, default=2,
-                        help='Multiplier to resize the image (default: 2)')
     args = parser.parse_args()
 
-    image_drawer = Template(args.image_path, args.multi)
+    image_drawer = Template(args.image_path)
     image_drawer.run()
