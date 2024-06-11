@@ -93,22 +93,27 @@ def moving_average_validation(vectors, radius, threshold=0.6):
     return validated_vectors
 
 
-def average_filter(vectors, m, n):
+def average_filter(vectors, radius):
     """
     The average filter method can be used to filter out the vector maps by arithmetic
     averaging over vector neighbors to reduce the noise
     :param vectors:
-    :param m:
-    :param n:
+    :param radius:
     :return:
     """
-    smoothed_vectors = np.copy(vectors)
-    rows, cols = vectors.shape[:2]
-    for i in range(rows):
-        for j in range(cols):
-            neighborhood = vectors[max(0, i - m):min(rows, i + m + 1), max(0, j - n):min(cols, j + n + 1)]
-            avg_vector = np.mean(neighborhood, axis=(0, 1))
-            smoothed_vectors[i, j] = avg_vector
+    smoothed_vectors = []
+
+    for index, vector in enumerate(vectors):
+        neighborhood = []
+        for i in range(len(vectors)):
+            if i != index:
+                distance = np.sqrt((vector[0][0] - vectors[i][0][0]) ** 2 +
+                                   (vector[0][1] - vectors[i][0][1]) ** 2)
+                if distance < radius:
+                    neighborhood.append([vectors[i][1], vectors[i][2]])
+
+        avg_vector = np.mean(np.array(neighborhood), axis=0)
+        smoothed_vectors.append((vectors[index][0], avg_vector[0], avg_vector[1]))
     return smoothed_vectors
 
 
@@ -249,10 +254,12 @@ class TemplateMatcher:
 
         displacement_field = self.correspondence_position(self._source_points, self._target_points)
 
-        # Apply the moving average filter
-        smoothed_displacement_arr = moving_average_validation(displacement_field,
-                                                              3 * self.get_length())
-
+        # Apply Filtering to reduce noise and outliers
+        radius = 3 * self.get_length()
+        moving_average_validation_arr = moving_average_validation(displacement_field,
+                                                                  radius)
+        smoothed_displacement_arr = average_filter(moving_average_validation_arr,
+                                                   radius)
         self.visualize_match(self._source_points, self._target_points, smoothed_displacement_arr)
 
     def get_length(self):
