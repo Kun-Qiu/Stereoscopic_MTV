@@ -144,6 +144,7 @@ class TemplateMatcher:
         self._source_points = None
         self._target_points = None
         self._polygon = None
+        self._displacement = None
 
     def set_boundary(self):
         """
@@ -258,9 +259,9 @@ class TemplateMatcher:
         radius = 2 * self.get_length()
         moving_average_validation_arr = moving_average_validation(displacement_field,
                                                                   radius)
-        smoothed_displacement_arr = average_filter(moving_average_validation_arr,
+        self._displacement = average_filter(moving_average_validation_arr,
                                                    radius)
-        self.visualize_match(self._source_points, self._target_points, smoothed_displacement_arr)
+        self.visualize_match(self._source_points, self._target_points, self._displacement)
 
     def get_length(self):
         return self._intersection[2]
@@ -268,6 +269,8 @@ class TemplateMatcher:
     def get_boundary(self):
         return self._polygon
 
+    def get_displacement(self):
+        return self._displacement
 
 def main():
     parser = argparse.ArgumentParser(description="Template Matching")

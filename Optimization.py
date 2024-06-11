@@ -4,11 +4,9 @@ import OpticalFlow
 import TemplateMatching
 import matplotlib.pyplot as plt
 from Utility import Visualization as vis
-from Utility.Template import correspondence_displacement
 import torch
 import torch.nn.functional as F
 from Utility.generateDisplacedImage import translateImage
-import numpy as np
 
 
 class DisplacementFieldModel(torch.nn.Module):
@@ -23,24 +21,6 @@ class DisplacementFieldModel(torch.nn.Module):
 
     def forward(self):
         return torch.stack((self.u, self.v), dim=-1)
-#
-#
-# def moving_average(displacement, kernel_size=3):
-#     padding = kernel_size // 2
-#     avg_u = F.avg_pool2d(displacement[:, :, 0].unsqueeze(0).unsqueeze(0),
-#                          kernel_size, stride=1, padding=padding).squeeze()
-#     avg_v = F.avg_pool2d(displacement[:, :, 1].unsqueeze(0).unsqueeze(0),
-#                          kernel_size, stride=1, padding=padding).squeeze()
-#     return torch.stack((avg_u, avg_v), dim=-1)
-#
-#
-# def average_filter(displacement, kernel_size=3):
-#     padding = kernel_size // 2
-#     avg_u = F.avg_pool2d(displacement[:, :, 0].unsqueeze(0).unsqueeze(0),
-#                          kernel_size, stride=1, padding=padding).squeeze()
-#     avg_v = F.avg_pool2d(displacement[:, :, 1].unsqueeze(0).unsqueeze(0),
-#                          kernel_size, stride=1, padding=padding).squeeze()
-#     return torch.stack((avg_u, avg_v), dim=-1)
 
 
 def smoothness_constraint(u, v):
@@ -93,12 +73,17 @@ def known_displace_constraint(optical_flow, template_flow, lambda_vel=10.0):
     """
     squared_error = 0
 
-    for x, y, dx, dy in template_flow:
-        x_optical = optical_flow[x, y, 0]
-        y_optical = optical_flow[x, y, 1]
+    for vector in template_flow:
+        x_template = vector[0][0]
+        y_template = vector[0][1]
+        x_displace_template = vector[1]
+        y_displace_template = vector[2]
 
-        x_diff_squared = (x_optical - dx) ** 2
-        y_diff_squared = (y_optical - dy) ** 2
+        x_optical = optical_flow[x_template, y_template, 0]
+        y_optical = optical_flow[x_template, y_template, 1]
+
+        x_diff_squared = (x_optical - x_displace_template) ** 2
+        y_diff_squared = (y_optical - y_displace_template) ** 2
 
         squared_error += (x_diff_squared + y_diff_squared)
 
@@ -168,29 +153,24 @@ Driver Code
 # Load original image and displacement field (example)
 source_path = 'Data/Source/frame_0.png'
 target_path = 'Data/Synthetic Target/synthetic_0.png'
-template_path = 'Data/Template/frame_0_temp.png'
-intersection = 'Data/Template/intersection.txt'
-source_image = cv2.imread(source_path)
-target_image = cv2.imread(target_path)
-template_image = cv2.imread(template_path)
 
+# Optical Flow
 of_object = OpticalFlow.OpticalFlow(source_path, target_path)
 of_object.calculate_optical_flow()
-
-source = TemplateMatching.TemplateMatcher(source_path, template_path, intersection)
-target = TemplateMatching.TemplateMatcher(target_path, template_path, intersection)
-source.match_template()
-target.match_template()
-source.visualizeMatchAfterNonMaxSuppression()
-target.visualizeMatchAfterNonMaxSuppression()
-
-correspondence = source.matching_displacement(target)
-observed = correspondence_displacement(correspondence)
-predicted = of_object.get_flow()
 of_object.visualize_flow()
+
+# Template Matching
+template_object = TemplateMatching.TemplateMatcher(source_path, target_path)
+template_object.match_template_driver()
+
+predicted = of_object.get_flow()
+observed = template_object.get_displacement()
 
 # ----------------------- Optimization ---------------------------------------------------------------
 # Initialize displacement field model and optimizer
+source_image = cv2.imread(source_path)
+target_image = cv2.imread(target_path)
+
 model = DisplacementFieldModel(predicted)
 optimizer = optim.Adam(model.parameters(), lr=1e-2)
 
@@ -199,48 +179,9 @@ target_image_tensor = torch.tensor(target_image, dtype=torch.float32, requires_g
 optimized_displacement = optimize_displacement_field(model, source_image_tensor,
                                                      target_image_tensor,
                                                      observed, optimizer,
-                                                     0, 1800, 10000)
+                                                     200, 1800, 10000)
 
 vis.visualize_displacement(source_image, "Optimized Displacement", optimized_displacement)
 vis.visualize_displacement(source_image, "Initial Displacement", predicted)
 vis.visualize_displacement_difference(optimized_displacement, predicted, source_image)
 plt.show()
-
-matched_points_source = np.array([source.get_x_coord(), source.get_y_coord()])
-matched_points_target = np.array([target.get_x_coord(), target.get_y_coord()])
-
-# Plotting
-plt.figure(figsize=(8, 6))
-# plt.scatter(matched_points_source[0], matched_points_source[1], c='b', label='Source Points')
-# plt.scatter(matched_points_target[0], matched_points_target[1], c='r', label='Target Points')
-
-x_coord = []
-y_coord = []
-dx_val = []
-dy_val = []
-for x, y, dx, dy in observed:
-    x_coord.append(x)
-    y_coord.append(y)
-    dx_val.append([optimized_displacement[x, y][0].detach().numpy(), dx])
-    dy_val.append([optimized_displacement[x, y][1].detach().numpy(), dy])
-
-plt.scatter(x_coord, y_coord, c='b', label='Source Points')
-
-# Plot vectors
-for x, y, dx, dy in zip(x_coord, y_coord, dx_val, dy_val):
-    plt.arrow(x, y, dx[0], dy[0], head_width=2, head_length=4, fc='red', ec='red', label='Predicted')
-    plt.arrow(x, y, dx[1], dy[1], head_width=2, head_length=4, fc='blue', ec='blue', label='Known')
-
-# # Plot vectors
-# for i in range(len(correspondence)):
-#     plt.scatter(correspondence[i][0][0], correspondence[i][0][1],
-#                 color='blue', marker='o')
-#     plt.arrow(correspondence[i][0][0], correspondence[i][0][1],
-#               correspondence[i][1][0] - correspondence[i][0][0],
-#               correspondence[i][1][1] - correspondence[i][0][1],
-#               head_width=2, head_length=4, fc='red', ec='red')
-
-# plt.xlabel('X')
-# plt.ylabel('Y')
-# plt.gca().invert_yaxis()
-# plt.show()
