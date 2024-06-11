@@ -22,20 +22,15 @@ def match_template(image, template, intersection, polygon, dx=2 / 3):
     W, H = template.shape[:2]
     rects = []
 
-    gray_source = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY) \
-        if len(image.shape) == 3 else image
-    gray_template = cv2.cvtColor(template, cv2.COLOR_BGR2GRAY) \
-        if len(template.shape) == 3 else template
+    gray_source = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY) if len(image.shape) == 3 else image
+    gray_template = cv2.cvtColor(template, cv2.COLOR_BGR2GRAY) if len(template.shape) == 3 else template
 
     img_blur = cv2.GaussianBlur(gray_source, (5, 5), 0)
     _, img_thresh = cv2.threshold(img_blur, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
 
-    # template_blur = cv2.GaussianBlur(gray_template, (5, 5), 0)
     _, template_thresh = cv2.threshold(gray_template, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
 
-    match = cv2.matchTemplate(image=img_thresh,
-                              templ=template_thresh,
-                              method=cv2.TM_CCOEFF_NORMED)
+    match = cv2.matchTemplate(image=img_thresh, templ=template_thresh, method=cv2.TM_CCOEFF_NORMED)
 
     # Minimum correlation threshold
     thresh = 0.35
@@ -57,19 +52,56 @@ def match_template(image, template, intersection, polygon, dx=2 / 3):
     return inter_pos
 
 
-def moving_average_validation(vectors, m, n, threshold=2.0):
-    validated_vectors = np.copy(vectors)
-    rows, cols = vectors.shape[:2]
-    for i in range(rows):
-        for j in range(cols):
-            neighborhood = vectors[max(0, i - m):min(rows, i + m + 1), max(0, j - n):min(cols, j + n + 1)]
-            avg_vector = np.mean(neighborhood, axis=(0, 1))
-            if np.linalg.norm(vectors[i, j] - avg_vector) > threshold * np.linalg.norm(avg_vector):
-                validated_vectors[i, j] = avg_vector
+def moving_average_validation(vectors, radius, threshold=0.6):
+    """
+    Moving average filter which compares displacement vectors with its neighbors.
+    If the deviation is above a threshold, the vector is replaced with the average
+    of the neighborhood of radius r.
+
+    :param vectors: The displacement vectors with their spatial positions (list of tuples).
+    :param radius: The radius of the neighborhood.
+    :param threshold: Threshold value for deviation from average of neighborhood.
+    :return: List of validated vectors.
+    """
+    validated_vectors = []
+
+    for index, vector in enumerate(vectors):
+        neighborhood = []
+        for i in range(len(vectors)):
+            if i != index:
+                distance = np.sqrt((vector[0][0] - vectors[i][0][0]) ** 2 +
+                                   (vector[0][1] - vectors[i][0][1]) ** 2)
+                if distance < radius:
+                    neighborhood.append([vectors[i][1], vectors[i][2]])
+
+        if len(neighborhood) == 0:
+            avg_vector = vector  # If no neighbors, keep the original vector
+        else:
+            avg_vector = np.mean(np.array(neighborhood), axis=0)
+
+        # Cosine similarity
+        dis_vector = [vector[1], vector[2]]
+        inner_product_displacement = np.dot(dis_vector, avg_vector)
+        product_displacement = np.linalg.norm(dis_vector) * np.linalg.norm(avg_vector)
+
+        cosine_similarity = inner_product_displacement / product_displacement
+        if cosine_similarity < threshold:
+            validated_vectors.append((vectors[index][0], avg_vector[0], avg_vector[1]))
+        else:
+            validated_vectors.append(vectors[index])
+
     return validated_vectors
 
 
 def average_filter(vectors, m, n):
+    """
+    The average filter method can be used to filter out the vector maps by arithmetic
+    averaging over vector neighbors to reduce the noise
+    :param vectors:
+    :param m:
+    :param n:
+    :return:
+    """
     smoothed_vectors = np.copy(vectors)
     rows, cols = vectors.shape[:2]
     for i in range(rows):
@@ -81,8 +113,7 @@ def average_filter(vectors, m, n):
 
 
 class TemplateMatcher:
-    def __init__(self, source_image_path, target_image_path,
-                 template_path=None, intersection_path=None):
+    def __init__(self, source_image_path, target_image_path, template_path=None, intersection_path=None):
         """
         Class initialization for the template matcher
         :param source_image_path: Path to source image
@@ -91,7 +122,6 @@ class TemplateMatcher:
         :param intersection_path: Path to intersection txt (Default is None)
         :return A Template Matching Object
         """
-
         self._source = cv2.imread(source_image_path)
         self._target = cv2.imread(target_image_path)
 
@@ -106,11 +136,6 @@ class TemplateMatcher:
             self._template = template[0]
             self._intersection = template[1]
 
-        """
-        Array contains the following information:
-        [[(x_s, y_s)], [(x_t, y_t)]] where s signifies position at source image
-                                           t signifies position at target image  
-        """
         self._source_points = None
         self._target_points = None
         self._polygon = None
@@ -223,7 +248,12 @@ class TemplateMatcher:
             print("No points detected in source or target.")
 
         displacement_field = self.correspondence_position(self._source_points, self._target_points)
-        self.visualize_match(self._source_points, self._target_points, displacement_field)
+
+        # Apply the moving average filter
+        smoothed_displacement_arr = moving_average_validation(displacement_field,
+                                                              3 * self.get_length())
+
+        self.visualize_match(self._source_points, self._target_points, smoothed_displacement_arr)
 
     def get_length(self):
         return self._intersection[2]
@@ -243,8 +273,7 @@ def main():
     """
     Sample visualization of the result of template matching on the image
     """
-    matcher = TemplateMatcher(args.source_image, args.target_image,
-                              args.template, args.intersection)
+    matcher = TemplateMatcher(args.source_image, args.target_image, args.template, args.intersection)
     matcher.match_template_driver()
     cv2.destroyAllWindows()
 
