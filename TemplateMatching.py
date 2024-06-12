@@ -1,11 +1,14 @@
 import cv2
 import numpy as np
-from imutils.object_detection import non_max_suppression
 import argparse
-import Utility.Polygon as pl
-import Utility.Template as tm
 import matplotlib.pyplot as plt
 import copy
+
+import Utility.Polygon as pl
+import Utility.Template as tm
+
+from scipy.interpolate import Rbf
+from imutils.object_detection import non_max_suppression
 
 
 def match_template(image, template, intersection, polygon, dx=2 / 3):
@@ -176,6 +179,39 @@ class TemplateMatcher:
 
         return pl.Polygon(points)
 
+    def displacement_interpolation(self, known_vertices, interpolation_type='spline'):
+        """
+        Interpolate the displacement vectors using the specified interpolation method.
+        :param known_vertices: List of known displacement vectors with positions [(x, y), (dx, dy), ...]
+        :param interpolation_type: Type of interpolation ('spline')
+        :return: Interpolated displacement field
+        """
+        if interpolation_type == 'spline':
+            points = np.array([v[0] for v in known_vertices])
+            displacements = np.array([v[1:] for v in known_vertices])
+
+            x = points[:, 0]
+            y = points[:, 1]
+            dx = displacements[:, 0]
+            dy = displacements[:, 1]
+
+            spline_dx = Rbf(x, y, dx, function='thin_plate')
+            spline_dy = Rbf(x, y, dy, function='thin_plate')
+
+            height, width = self._source.shape[:2]
+            grid_x, grid_y = np.meshgrid(np.arange(width), np.arange(height))
+            interp_dx = spline_dx(grid_x, grid_y)
+            interp_dy = spline_dy(grid_x, grid_y)
+
+            interpolated_displacement = np.zeros((height, width, 2), dtype=np.uint8)
+            for i in range(height):
+                for j in range(width):
+                    interpolated_displacement[j, i] = [interp_dx[i, j], interp_dy[i, j]]
+
+            return interpolated_displacement
+        else:
+            raise ValueError(f"Unsupported interpolation type: {interpolation_type}")
+
     def visualize_match(self, source_points, target_points, source_correspondence):
         """
         Visualize the displacement
@@ -260,7 +296,7 @@ class TemplateMatcher:
         moving_average_validation_arr = moving_average_validation(displacement_field,
                                                                   radius)
         self._displacement = average_filter(moving_average_validation_arr,
-                                                   radius)
+                                            radius)
         self.visualize_match(self._source_points, self._target_points, self._displacement)
 
     def get_length(self):
@@ -271,6 +307,7 @@ class TemplateMatcher:
 
     def get_displacement(self):
         return self._displacement
+
 
 def main():
     parser = argparse.ArgumentParser(description="Template Matching")
