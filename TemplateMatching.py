@@ -255,7 +255,7 @@ class TemplateMatcher:
         :return: A correspondence between the intersection points
         """
 
-        distance_thresh = 0.5 * self.get_length()
+        distance_thresh = 0.5 * self.get_length() * np.sin(np.pi/4)
         target_tmp = copy.deepcopy(target)
 
         correspondence = []
