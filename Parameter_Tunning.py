@@ -25,7 +25,6 @@ total_combination = len(param_combinations)
 source_path = 'Data/Source/frame_0.png'
 target_path = 'Data/Target/synethetic_1.png'
 template_path = 'Data/Template/frame_0_temp.png'
-intersection = 'Data/Template/intersection.txt'
 
 source_image = cv2.imread(source_path)
 target_image = cv2.imread(target_path)
@@ -34,8 +33,8 @@ template_image = cv2.imread(template_path)
 of_object = OpticalFlow.OpticalFlow(source_path, target_path)
 of_object.calculate_optical_flow()
 
-source = TemplateMatching.TemplateMatcher(source_path, template_path, intersection)
-target = TemplateMatching.TemplateMatcher(target_path, template_path, intersection)
+source = TemplateMatching
+target = TemplateMatching
 source.match_template()
 target.match_template()
 

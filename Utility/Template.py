@@ -26,8 +26,9 @@ def obtain_line(img, pt1, pt2, color=(0, 255, 0), thickness=2):
 
 
 class Template:
-    def __init__(self, image_path):
+    def __init__(self, image_path, save_path):
         self.image = cv2.imread(image_path)
+        self.save_path = save_path
         self.points = []
 
     def user_prompted_points(self):
@@ -95,14 +96,12 @@ class Template:
         length = 0.5 * np.sqrt((self.points[0][0] - self.points[1][0]) ** 2 +
                                (self.points[0][1] - self.points[1][1]) ** 2)
 
-        inter_x, inter_y = self.find_intersection()
-        intersection_point_relative = np.array([(inter_x - min_x),
-                                                (inter_y - min_y),
-                                                length])
-
         # Crop the image to the bounding box
         cropped_image = self.image[min_y:max_y, min_x:max_x]
-        return [cropped_image, intersection_point_relative]
+        cv2.imwrite(self.save_path, cropped_image)
+
+        with open('length.txt', 'w') as f:
+            f.write(length)
 
     def find_intersection(self):
         """
@@ -136,12 +135,12 @@ if __name__ == "__main__":
     """
     Argument parsing --> Driver code 
     Example terminal command -> 
-    python \Template.py path_to_image path_to template --multi image_scale
+    python \Template.py path_to_image path_to template
     """
     parser = argparse.ArgumentParser(description='Draw lines on an image')
     parser.add_argument('image_path', type=str, help='Path to the input image file')
     parser.add_argument('save_path', type=str, help='Path to save image')
     args = parser.parse_args()
 
-    image_drawer = Template(args.image_path)
+    image_drawer = Template(args.image_path, args.save_path)
     image_drawer.run()

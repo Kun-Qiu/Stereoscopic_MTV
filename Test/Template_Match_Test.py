@@ -3,12 +3,22 @@ import TemplateMatching
 import matplotlib.pyplot as plt
 import numpy as np
 
+
 # Paths to images
-source_path = '../Data/Source/frame_0.png'
-target_path = '../Data/Target/frame_0_2us.png'
+# source_path = '../Data/Source/frame_0.png'
+# target_path = '../Data/Synthetic Target/synthetic_0.png'
+# template_path = '../Data/Template/frame_0_temp.png'
+
+source_path = '../Data/Source/source_25.png'
+target_path = '../Data/Target/target_25.png'
+template_path = '../Data/Template/template25.png'
+
+# source_path = '../Data/Source/source_25_new.png'
+# target_path = '../Data/Target/target_25_new.png'
+# template_path = '../Data/Template/template25.png'
 
 # Initialize template matchers
-template_object = TemplateMatching.TemplateMatcher(source_path, target_path)
+template_object = TemplateMatching.TemplateMatcher(source_path, target_path, template_path)
 template_object.match_template_driver()
 
 # displacement = template_object.get_displacement()

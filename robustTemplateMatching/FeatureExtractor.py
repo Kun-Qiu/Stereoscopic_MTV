@@ -1,15 +1,9 @@
-import cv2
-
-import torch
 import torch.nn as nn
-import torch.nn.functional as F
-import torchvision
-from torchvision import models, transforms, utils
 import numpy as np
 import copy
 
 
-class FeatureExtractor():
+class FeatureExtractor:
     def __init__(self, model, use_cuda=True, padding=True):
         self.model = copy.deepcopy(model)
         self.model = self.model.eval()
@@ -106,7 +100,7 @@ class FeatureExtractor():
         if use_cython:
             F = self.template_feature_map.numpy()[0].astype(np.float32)
             M = self.image_feature_map.numpy()[0].astype(np.float32)
-            import cython_files.cython_calc_NCC as cython_calc_NCC
+            import cython_files.cython_calc_NCC.c as cython_calc_NCC
             self.NCC = np.zeros(
                 (M.shape[1] - F.shape[1]) * (M.shape[2] - F.shape[2])).astype(np.float32)
             cython_calc_NCC.c_calc_NCC(M.flatten().astype(np.float32), np.array(M.shape).astype(
@@ -121,7 +115,7 @@ class FeatureExtractor():
 
         # Lower -> usually lower threshold is more relaxed
         if threshold is None:
-            threshold = 0.875 * np.max(self.NCC)
+            threshold = 0.9 * np.max(self.NCC)
         else:
             threshold = threshold * np.max(self.NCC)
 

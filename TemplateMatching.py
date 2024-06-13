@@ -5,54 +5,37 @@ import matplotlib.pyplot as plt
 import copy
 
 import Utility.Polygon as pl
-import Utility.Template as tm
-
-from scipy.interpolate import Rbf
-from imutils.object_detection import non_max_suppression
+from torchvision import models, transforms
+from robustTemplateMatching.FeatureExtractor import FeatureExtractor
 
 
-def match_template(image, template, intersection, polygon, dx=2 / 3):
-    """
-    Using OpenCV template matching module, the template is being matched to the
-    image to find location where the similarity is the strongest
-    :param  image: The image in which the template matching is applied toward
-    :param  template: The template in which the source image is compared against
-    :param  intersection: The spatial position of the intersection point
-    :param  polygon: The spatial constraint for filtering out false positive detections
-    :param  dx: Window where the non-max suppression is applied toward
-    :return: List of (x, y) coordinates where similarity is above threshold value
-    """
-    W, H = template.shape[:2]
-    rects = []
+def nms(dets, scores, thresh):
+    x1 = dets[:, 0, 0]
+    y1 = dets[:, 0, 1]
+    x2 = dets[:, 1, 0]
+    y2 = dets[:, 1, 1]
 
-    gray_source = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY) if len(image.shape) == 3 else image
-    gray_template = cv2.cvtColor(template, cv2.COLOR_BGR2GRAY) if len(template.shape) == 3 else template
+    areas = (x2 - x1 + 1) * (y2 - y1 + 1)
+    order = scores.argsort()[::-1]
 
-    img_blur = cv2.GaussianBlur(gray_source, (5, 5), 0)
-    _, img_thresh = cv2.threshold(img_blur, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    keep = []
+    while order.size > 0:
+        i = order[0]
+        keep.append(i)
+        xx1 = np.maximum(x1[i], x1[order[1:]])
+        yy1 = np.maximum(y1[i], y1[order[1:]])
+        xx2 = np.minimum(x2[i], x2[order[1:]])
+        yy2 = np.minimum(y2[i], y2[order[1:]])
 
-    _, template_thresh = cv2.threshold(gray_template, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+        w = np.maximum(0.0, xx2 - xx1 + 1)
+        h = np.maximum(0.0, yy2 - yy1 + 1)
+        inter = w * h
+        ovr = inter / (areas[i] + areas[order[1:]] - inter)
 
-    match = cv2.matchTemplate(image=img_thresh, templ=template_thresh, method=cv2.TM_CCOEFF_NORMED)
+        inds = np.where(ovr <= thresh)[0]
+        order = order[inds + 1]
 
-    # Minimum correlation threshold
-    thresh = 0.35
-    temp_y, temp_x = np.where(match >= thresh)
-
-    for (x, y) in zip(temp_x, temp_y):
-        rects.append((x, y, x + dx * H, y + dx * W))
-
-    # Apply non-maxima suppression to the rectangles
-    pick = non_max_suppression(np.array(rects))
-    inter_pos = []
-
-    for (startX, startY, endX, endY) in pick:
-        x_inter = int(startX + intersection[0])
-        y_inter = int(startY + intersection[1])
-        if polygon.contains(pl.Point(x_inter, y_inter)):
-            inter_pos.append((x_inter, y_inter))
-
-    return inter_pos
+    return keep
 
 
 def moving_average_validation(vectors, radius, threshold=0.6):
@@ -120,34 +103,77 @@ def average_filter(vectors, radius):
     return smoothed_vectors
 
 
+def match_template(raw_img, img, template, polygon, use_CUDA=False, use_cython=False,
+                   threshold=None, nms_thresh=0.5):
+    """
+    Using OpenCV template matching module, the template is being matched to the
+    image to find location where the similarity is the strongest
+    :param raw_img:         The image before preprocessing
+    :param img:             The image of which template matching is applied to
+    :param template:        The template of which used to match for similarity
+    :param polygon:         The spatial constraint for filtering out false positive detections
+    :param use_CUDA:        Use CUDA for computation (Speed up computation)
+    :param use_cython:      Use Cython to compile C
+    :param threshold:
+    :param nms_thresh:
+    :return:                List of (x, y) coordinates where similarity is above threshold value
+    """
+
+    vgg_feature = models.vgg13(pretrained=True).features
+    FE = FeatureExtractor(vgg_feature, use_cuda=use_CUDA, padding=True)
+    boxes, centers, scores = FE(
+        template, img, threshold=threshold, use_cython=use_cython)
+    d_img = raw_img.astype(np.uint8).copy()
+
+    # Avoid index error if no box is detected
+    real_centers = []
+    img_temp = d_img.copy()
+    if len(boxes) > 0:
+        nms_res = nms(np.array(boxes), np.array(scores), thresh=nms_thresh)
+        print("detected objects: {}".format(len(nms_res)))
+        for i in nms_res:
+            if polygon.contains(pl.Point(centers[i][0], centers[i][1])):
+                cv2.circle(img_temp, centers[i], 0, (0, 0, 255), 2)
+                real_centers.append(centers[i])
+
+    cv2.namedWindow("Match", cv2.WINDOW_NORMAL)
+    cv2.resizeWindow("Match", 800, 800)
+    cv2.imshow("Match", img_temp)
+    cv2.waitKey()
+    return real_centers
+
+
 class TemplateMatcher:
-    def __init__(self, source_image_path, target_image_path, template_path=None, intersection_path=None):
+    def __init__(self, source_image_path, target_image_path, template_path):
         """
         Class initialization for the template matcher
         :param source_image_path: Path to source image
         :param target_image_path: Path to target image
-        :param template_path: Path to template image (Default is None)
-        :param intersection_path: Path to intersection txt (Default is None)
+        :param template_path: Path to template image
         :return A Template Matching Object
         """
-        self._source = cv2.imread(source_image_path)
-        self._target = cv2.imread(target_image_path)
 
-        self._template = None
-        self._intersection = None
+        image_transform = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Normalize(
+                mean=[0.485, 0.456, 0.406],
+                std=[0.229, 0.224, 0.225],
+            )
+        ])
 
-        if template_path is not None or intersection_path is not None:
-            self._template = cv2.imread(template_path)
-        else:
-            template_object = tm.Template(source_image_path)
-            template = template_object.run()
-            self._template = template[0]
-            self._intersection = template[1]
+        self._raw_source = cv2.imread(source_image_path)[..., ::-1]
+        self._raw_target = cv2.imread(target_image_path)[..., ::-1]
+        self._raw_template = cv2.imread(template_path)[..., ::-1]
+
+        self._template = image_transform(self._raw_template.copy()).unsqueeze(0)
+        self._source = image_transform(self._raw_source.copy()).unsqueeze(0)
+        self._target = image_transform(self._raw_target.copy()).unsqueeze(0)
 
         self._source_points = None
         self._target_points = None
         self._polygon = None
         self._displacement = None
+        self._length = np.loadtxt('../length.txt')
 
     def set_boundary(self):
         """
@@ -157,7 +183,7 @@ class TemplateMatcher:
         :return: A boundary object
         """
         points = []
-        img_clone = self._source.copy()
+        img_clone = self._raw_source.copy()
 
         def pick(event, x, y, flags, param):
             nonlocal points
@@ -179,38 +205,38 @@ class TemplateMatcher:
 
         return pl.Polygon(points)
 
-    def displacement_interpolation(self, known_vertices, interpolation_type='spline'):
-        """
-        Interpolate the displacement vectors using the specified interpolation method.
-        :param known_vertices: List of known displacement vectors with positions [(x, y), (dx, dy), ...]
-        :param interpolation_type: Type of interpolation ('spline')
-        :return: Interpolated displacement field
-        """
-        if interpolation_type == 'spline':
-            points = np.array([v[0] for v in known_vertices])
-            displacements = np.array([v[1:] for v in known_vertices])
-
-            x = points[:, 0]
-            y = points[:, 1]
-            dx = displacements[:, 0]
-            dy = displacements[:, 1]
-
-            spline_dx = Rbf(x, y, dx, function='thin_plate')
-            spline_dy = Rbf(x, y, dy, function='thin_plate')
-
-            height, width = self._source.shape[:2]
-            grid_x, grid_y = np.meshgrid(np.arange(width), np.arange(height))
-            interp_dx = spline_dx(grid_x, grid_y)
-            interp_dy = spline_dy(grid_x, grid_y)
-
-            interpolated_displacement = np.zeros((height, width, 2), dtype=np.uint8)
-            for i in range(height):
-                for j in range(width):
-                    interpolated_displacement[j, i] = [interp_dx[i, j], interp_dy[i, j]]
-
-            return interpolated_displacement
-        else:
-            raise ValueError(f"Unsupported interpolation type: {interpolation_type}")
+    # def displacement_interpolation(self, known_vertices, interpolation_type='spline'):
+    #     """
+    #     Interpolate the displacement vectors using the specified interpolation method.
+    #     :param known_vertices: List of known displacement vectors with positions [(x, y), (dx, dy), ...]
+    #     :param interpolation_type: Type of interpolation ('spline')
+    #     :return: Interpolated displacement field
+    #     """
+    #     if interpolation_type == 'spline':
+    #         points = np.array([v[0] for v in known_vertices])
+    #         displacements = np.array([v[1:] for v in known_vertices])
+    #
+    #         x = points[:, 0]
+    #         y = points[:, 1]
+    #         dx = displacements[:, 0]
+    #         dy = displacements[:, 1]
+    #
+    #         spline_dx = Rbf(x, y, dx, function='thin_plate')
+    #         spline_dy = Rbf(x, y, dy, function='thin_plate')
+    #
+    #         height, width = self._source.shape[:2]
+    #         grid_x, grid_y = np.meshgrid(np.arange(width), np.arange(height))
+    #         interp_dx = spline_dx(grid_x, grid_y)
+    #         interp_dy = spline_dy(grid_x, grid_y)
+    #
+    #         interpolated_displacement = np.zeros((height, width, 2), dtype=np.uint8)
+    #         for i in range(height):
+    #             for j in range(width):
+    #                 interpolated_displacement[j, i] = [interp_dx[i, j], interp_dy[i, j]]
+    #
+    #         return interpolated_displacement
+    #     else:
+    #         raise ValueError(f"Unsupported interpolation type: {interpolation_type}")
 
     def visualize_match(self, source_points, target_points, source_correspondence):
         """
@@ -223,7 +249,7 @@ class TemplateMatcher:
 
         # Create a plot
         plt.figure(figsize=(10, 8))
-        plt.imshow(self._source)
+        plt.imshow(self._raw_source)
 
         # Plot the source points
         source_x = [point[0] for point in source_points]
@@ -255,7 +281,7 @@ class TemplateMatcher:
         :return: A correspondence between the intersection points
         """
 
-        distance_thresh = 0.5 * self.get_length() * np.sin(np.pi/4)
+        distance_thresh = 0.5 * self._length * np.sin(np.pi / 4)
         target_tmp = copy.deepcopy(target)
 
         correspondence = []
@@ -283,26 +309,20 @@ class TemplateMatcher:
         :return: None
         """
         self._polygon = self.set_boundary()
-        self._source_points = match_template(self._source, self._template,
-                                             self._intersection, self._polygon)
-        self._target_points = match_template(self._target, self._template,
-                                             self._intersection, self._polygon)
-
-        if not self._source_points or not self._target_points:
-            print("No points detected in source or target.")
+        self._source_points = match_template(self._raw_source, self._source, self._template,
+                                             self._polygon)
+        self._target_points = match_template(self._raw_target, self._target, self._template,
+                                             self._polygon)
 
         displacement_field = self.correspondence_position(self._source_points, self._target_points)
 
         # Apply Filtering to reduce noise and outliers
-        radius = 2 * self.get_length()
+        radius = 2 * self._length
         moving_average_validation_arr = moving_average_validation(displacement_field,
                                                                   radius)
         self._displacement = average_filter(moving_average_validation_arr,
                                             radius)
-        self.visualize_match(self._source_points, self._target_points, self._displacement)
-
-    def get_length(self):
-        return self._intersection[2]
+        self.visualize_match(self._source_points, self._target_points, displacement_field)
 
     def get_boundary(self):
         return self._polygon
@@ -315,14 +335,16 @@ def main():
     parser = argparse.ArgumentParser(description="Template Matching")
     parser.add_argument("source_image", help="Path to the source image")
     parser.add_argument("target_image", help="Path to the target image")
-    parser.add_argument("template", nargs='?', default=None, help="Path to the template image (optional)")
-    parser.add_argument("intersection", nargs='?', default=None, help="Path to the intersection file (optional)")
+    parser.add_argument('--use_cuda', action='store_true')
+    parser.add_argument('--use_cython', action='store_true')
+    parser.add_argument('--threshold', type=float, default=None)
+    parser.add_argument('--nms', type=float, default=0.5)
     args = parser.parse_args()
 
     """
     Sample visualization of the result of template matching on the image
     """
-    matcher = TemplateMatcher(args.source_image, args.target_image, args.template, args.intersection)
+    matcher = TemplateMatcher(args.source_image, args.target_image)
     matcher.match_template_driver()
     cv2.destroyAllWindows()
 
