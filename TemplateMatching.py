@@ -272,6 +272,8 @@ class TemplateMatcher:
                 y_displace = target_tmp[min_index][1] - source_point[1]
                 correspondence.append((source_point, x_displace, y_displace))
                 target_tmp.pop(min_index)
+            else:
+                correspondence.append((source_point, 0, 0))
 
         return correspondence
 

@@ -139,7 +139,7 @@ def optimize_displacement_field(model, source_img, target_img, observed_displace
         optimizer.step()
         optimizer.zero_grad()
         epoch = epoch + 1
-        # print(f'Epoch [{epoch + 1}/{num_epochs}], Loss: {loss.item()}')
+        print(f'Epoch [{epoch + 1}/{num_epochs}], Loss: {loss.item()}')
 
     return predicted_displacement
 
@@ -151,8 +151,8 @@ Driver Code
 """
 
 # Load original image and displacement field (example)
-source_path = 'Data/Source/frame_0.png'
-target_path = 'Data/Synthetic Target/synthetic_0.png'
+source_path = 'Data/Source/frame_1.png'
+target_path = 'Data/Target/frame_1_2us.png'
 
 # Optical Flow
 of_object = OpticalFlow.OpticalFlow(source_path, target_path)
@@ -179,7 +179,7 @@ target_image_tensor = torch.tensor(target_image, dtype=torch.float32, requires_g
 optimized_displacement = optimize_displacement_field(model, source_image_tensor,
                                                      target_image_tensor,
                                                      observed, optimizer,
-                                                     200, 1800, 10000)
+                                                     50, 300, 10000)
 
 vis.visualize_displacement(source_image, "Optimized Displacement", optimized_displacement)
 vis.visualize_displacement(source_image, "Initial Displacement", predicted)

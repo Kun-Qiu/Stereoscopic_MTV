@@ -21,8 +21,8 @@ class OpticalFlow:
                                                   levels=3,
                                                   winsize=15,
                                                   iterations=10,
-                                                  poly_n=10,
-                                                  poly_sigma=1.5,
+                                                  poly_n=5,
+                                                  poly_sigma=1.2,
                                                   flags=0)
 
     def visualize_flow(self):
@@ -45,8 +45,8 @@ class OpticalFlow:
         return np.stack((self._flow[:, :, 0], self._flow[:, :, 1]), axis=-1)
 
 
-source_path = 'Data/Source/frame_0.png'
-target_path = 'Data/Target/frame_0_2us.png'
-optical_flow_object = OpticalFlow(source_path, target_path)
-optical_flow_object.calculate_optical_flow()
-optical_flow_object.visualize_flow()
+# source_path = 'Data/Source/source_25.png'
+# target_path = 'Data/Target/target_25.png'
+# optical_flow_object = OpticalFlow(source_path, target_path)
+# optical_flow_object.calculate_optical_flow()
+# optical_flow_object.visualize_flow()
