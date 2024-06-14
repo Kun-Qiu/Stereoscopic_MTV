@@ -10,6 +10,15 @@ from robustTemplateMatching.FeatureExtractor import FeatureExtractor
 
 
 def nms(dets, scores, thresh):
+    """
+    Non-maximum suppression of multiple detection of the template within
+    an image.
+
+    :param dets:
+    :param scores:
+    :param thresh:
+    :return:
+    """
     x1 = dets[:, 0, 0]
     y1 = dets[:, 0, 1]
     x2 = dets[:, 1, 0]
@@ -44,10 +53,10 @@ def moving_average_validation(vectors, radius, threshold=0.6):
     If the deviation is above a threshold, the vector is replaced with the average
     of the neighborhood of radius r.
 
-    :param vectors: The displacement vectors with their spatial positions (list of tuples).
-    :param radius: The radius of the neighborhood.
-    :param threshold: Threshold value for deviation from average of neighborhood.
-    :return: List of validated vectors.
+    :param vectors:     The displacement vectors with their spatial positions (list of tuples).
+    :param radius:      The radius of the neighborhood.
+    :param threshold:   Threshold value for deviation from average of neighborhood.
+    :return:            Array of validated displacement vectors based on moving average.
     """
     validated_vectors = []
 
@@ -61,20 +70,28 @@ def moving_average_validation(vectors, radius, threshold=0.6):
                     neighborhood.append([vectors[i][1], vectors[i][2]])
 
         if len(neighborhood) == 0:
-            avg_vector = vector  # If no neighbors, keep the original vector
+            avg_vector = vector[1:]  # If no neighbors, keep the original vector (excluding the position)
         else:
             avg_vector = np.mean(np.array(neighborhood), axis=0)
 
         # Cosine similarity
-        dis_vector = [vector[1], vector[2]]
-        inner_product_displacement = np.dot(dis_vector, avg_vector)
-        product_displacement = np.linalg.norm(dis_vector) * np.linalg.norm(avg_vector)
+        dis_vector = np.array([vector[1], vector[2]])
+        avg_vector = np.array(avg_vector)
 
-        cosine_similarity = inner_product_displacement / product_displacement
-        if cosine_similarity < threshold:
-            validated_vectors.append((vectors[index][0], avg_vector[0], avg_vector[1]))
+        norm_dis_vector = np.linalg.norm(dis_vector)
+        norm_avg_vector = np.linalg.norm(avg_vector)
+
+        if norm_dis_vector == 0 or norm_avg_vector == 0:
+            cosine_similarity = 0  # Handle the zero norm case
         else:
-            validated_vectors.append(vectors[index])
+            inner_product_displacement = np.dot(dis_vector, avg_vector)
+            product_displacement = norm_dis_vector * norm_avg_vector
+            cosine_similarity = inner_product_displacement / product_displacement
+
+        if cosine_similarity < threshold:
+            validated_vectors.append((vector[0], avg_vector[0], avg_vector[1]))
+        else:
+            validated_vectors.append(vector)
 
     return validated_vectors
 
@@ -83,9 +100,10 @@ def average_filter(vectors, radius):
     """
     The average filter method can be used to filter out the vector maps by arithmetic
     averaging over vector neighbors to reduce the noise
-    :param vectors:
-    :param radius:
-    :return:
+
+    :param vectors:     Array of displacement vectors
+    :param radius:      Radius of the neighborhood
+    :return:            Smoothed displacement field based on the neighborhood average
     """
     smoothed_vectors = []
 
@@ -108,14 +126,15 @@ def match_template(raw_img, img, template, polygon, use_CUDA=False, use_cython=F
     """
     Using OpenCV template matching module, the template is being matched to the
     image to find location where the similarity is the strongest
+
     :param raw_img:         The image before preprocessing
     :param img:             The image of which template matching is applied to
     :param template:        The template of which used to match for similarity
     :param polygon:         The spatial constraint for filtering out false positive detections
     :param use_CUDA:        Use CUDA for computation (Speed up computation)
     :param use_cython:      Use Cython to compile C
-    :param threshold:
-    :param nms_thresh:
+    :param threshold:       Threshold for the normalized cross correlation
+    :param nms_thresh:      Threshold for the Non-Maximum Suppression
     :return:                List of (x, y) coordinates where similarity is above threshold value
     """
 
@@ -132,9 +151,9 @@ def match_template(raw_img, img, template, polygon, use_CUDA=False, use_cython=F
         nms_res = nms(np.array(boxes), np.array(scores), thresh=nms_thresh)
         print("detected objects: {}".format(len(nms_res)))
         for i in nms_res:
-            # if polygon.contains(pl.Point(centers[i][0], centers[i][1])):
-            cv2.circle(img_temp, centers[i], 0, (0, 0, 255), 2)
-            real_centers.append(centers[i])
+            if polygon.contains(pl.Point(centers[i][0], centers[i][1])):
+                cv2.circle(img_temp, centers[i], 0, (0, 0, 255), 2)
+                real_centers.append(centers[i])
 
     cv2.namedWindow("Match", cv2.WINDOW_NORMAL)
     cv2.resizeWindow("Match", 800, 800)
@@ -146,11 +165,12 @@ def match_template(raw_img, img, template, polygon, use_CUDA=False, use_cython=F
 class TemplateMatcher:
     def __init__(self, source_image_path, target_image_path, template_path):
         """
-        Class initialization for the template matcher
-        :param source_image_path: Path to source image
-        :param target_image_path: Path to target image
-        :param template_path: Path to template image
-        :return A Template Matching Object
+        Default Constructor for Template Matcher
+
+        :param source_image_path:       Path to the source image
+        :param target_image_path:       Path to the target image
+        :param template_path:           Path to the template image
+        :return:                        Returns template matching object
         """
 
         image_transform = transforms.Compose([
@@ -180,6 +200,7 @@ class TemplateMatcher:
         For easier detection of the relevant points, the user is asked to plot the vertices of the polygon
         that encompasses the region of interest. The boundary and the edges of the polygon is obtained to
         assist the filtering of the detected intersection.
+
         :return: A boundary object
         """
         points = []
@@ -205,46 +226,14 @@ class TemplateMatcher:
 
         return pl.Polygon(points)
 
-    # def displacement_interpolation(self, known_vertices, interpolation_type='spline'):
-    #     """
-    #     Interpolate the displacement vectors using the specified interpolation method.
-    #     :param known_vertices: List of known displacement vectors with positions [(x, y), (dx, dy), ...]
-    #     :param interpolation_type: Type of interpolation ('spline')
-    #     :return: Interpolated displacement field
-    #     """
-    #     if interpolation_type == 'spline':
-    #         points = np.array([v[0] for v in known_vertices])
-    #         displacements = np.array([v[1:] for v in known_vertices])
-    #
-    #         x = points[:, 0]
-    #         y = points[:, 1]
-    #         dx = displacements[:, 0]
-    #         dy = displacements[:, 1]
-    #
-    #         spline_dx = Rbf(x, y, dx, function='thin_plate')
-    #         spline_dy = Rbf(x, y, dy, function='thin_plate')
-    #
-    #         height, width = self._source.shape[:2]
-    #         grid_x, grid_y = np.meshgrid(np.arange(width), np.arange(height))
-    #         interp_dx = spline_dx(grid_x, grid_y)
-    #         interp_dy = spline_dy(grid_x, grid_y)
-    #
-    #         interpolated_displacement = np.zeros((height, width, 2), dtype=np.uint8)
-    #         for i in range(height):
-    #             for j in range(width):
-    #                 interpolated_displacement[j, i] = [interp_dx[i, j], interp_dy[i, j]]
-    #
-    #         return interpolated_displacement
-    #     else:
-    #         raise ValueError(f"Unsupported interpolation type: {interpolation_type}")
-
     def visualize_match(self, source_points, target_points, source_correspondence):
         """
-        Visualize the displacement
-        :param source_points: List of tuples [(x, y), (x1, y1), ...] representing source points
-        :param target_points: List of tuples [(x, y), (x1, y1), ...] representing target points
-        :param source_correspondence: List of tuples that represents the displacement
-        :return: None
+        Visualize the displacement of the source points to the target points
+
+        :param source_points:           List of tuples [(x, y), (x1, y1), ...] representing source points
+        :param target_points:           List of tuples [(x, y), (x1, y1), ...] representing target points
+        :param source_correspondence:   List of tuples that represents the displacement
+        :return:                        None
         """
 
         # Create a plot
@@ -274,11 +263,16 @@ class TemplateMatcher:
 
     def correspondence_position(self, source, target):
         """
-        Find the correspondence between two set of intersection points
-        on the image
-        :param source: Intersections within the source image
-        :param target: Intersections within the target image
-        :return: A correspondence between the intersection points
+        Find the correspondence between two set of intersection points. Any pair of (source, target) point
+        is considered corresponding if the distance between the pair is less than half the length
+        of perpendicular distance from one line to the other line.
+
+        Assumption: The Delta time is kept small such that the grids will move less than half the
+                    distance from one line to the other line
+
+        :param source:      Intersections within the source image
+        :param target:      Intersections within the target image
+        :return:            A correspondence between the intersection points
         """
 
         distance_thresh = 0.5 * self._length * np.sin(np.pi / 4)
@@ -305,23 +299,25 @@ class TemplateMatcher:
 
     def match_template_driver(self):
         """
-        Driver function for the template matching algorithm using the OpenCV Module
-        :return: None
+        Credit must be given to Zhirui Gao, et al in their paper "Learning Accurate Template Matching
+        with Differentiable Coarse-to-Fine Correspondence Refinement
+
+        The template matching driver function
         """
-        # self._polygon = self.set_boundary()
+        self._polygon = self.set_boundary()
         self._source_points = match_template(self._raw_source, self._source, self._template,
-                                             self._polygon)
+                                             self._polygon, threshold=0.90)
         self._target_points = match_template(self._raw_target, self._target, self._template,
-                                             self._polygon)
+                                             self._polygon, threshold=0.85)
         displacement_field = self.correspondence_position(self._source_points, self._target_points)
 
         # # Apply Filtering to reduce noise and outliers
-        # radius = 2 * self._length
-        # moving_average_validation_arr = moving_average_validation(displacement_field,
-        #                                                           radius)
-        # self._displacement = average_filter(moving_average_validation_arr,
-        #                                     radius)
-        self.visualize_match(self._source_points, self._target_points, displacement_field)
+        radius = 2 * self._length
+        moving_average_validation_arr = moving_average_validation(displacement_field,
+                                                                  radius)
+        self._displacement = average_filter(moving_average_validation_arr,
+                                            radius)
+        self.visualize_match(self._source_points, self._target_points, self._displacement)
 
     def get_boundary(self):
         return self._polygon
@@ -334,6 +330,7 @@ def main():
     parser = argparse.ArgumentParser(description="Template Matching")
     parser.add_argument("source_image", help="Path to the source image")
     parser.add_argument("target_image", help="Path to the target image")
+    parser.add_argument("template", help="Path to the template image")
     parser.add_argument('--use_cuda', action='store_true')
     parser.add_argument('--use_cython', action='store_true')
     parser.add_argument('--threshold', type=float, default=None)
@@ -343,7 +340,7 @@ def main():
     """
     Sample visualization of the result of template matching on the image
     """
-    matcher = TemplateMatcher(args.source_image, args.target_image)
+    matcher = TemplateMatcher(args.source_image, args.target_image, args.template)
     matcher.match_template_driver()
     cv2.destroyAllWindows()
 

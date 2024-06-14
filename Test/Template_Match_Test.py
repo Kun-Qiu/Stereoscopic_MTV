@@ -2,11 +2,15 @@ import cv2
 import TemplateMatching
 import matplotlib.pyplot as plt
 import numpy as np
+import Utility.TifReader as tr
 
+# tif = tr.TifReader('../Data/Source/bp0_0p0_0microsec.tif',
+#                    '../Data/Source/source_avg.png')
+# source = tif.average_tif(save_path=True)
 
 # Paths to images
-source_path = '../Data/Source/frame_0.png'
-target_path = '../Data/Synthetic Target/synthetic_0.png'
+source_path = '../Data/Source/source_avg.png'
+target_path = '../Data/Synthetic Target/img1.png'
 template_path = '../Data/Template/frame_0_temp.png'
 
 # source_path = '../Data/Source/source_25.png'

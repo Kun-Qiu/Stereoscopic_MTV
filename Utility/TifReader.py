@@ -1,4 +1,4 @@
-import cv2 as cv
+import cv2
 import numpy as np
 from PIL import Image
 from matplotlib.pyplot import imsave
@@ -7,31 +7,34 @@ from matplotlib.pyplot import imsave
 class TifReader:
     # Public Interface
 
-    def __init__(self, img):
+    def __init__(self, img, save_path):
         """
-        Default Constructor of reader object
-        :param img: image
+        Default Constructor
+        :param img:         The tif image
+        :param save_path:   Path in which to save the image if chosen to do so
         """
         self.__img = img
+        self.__save_path = save_path
         self.__read_tif()
         self.__sort_array_signal()
 
     def get_uint8(self, img):
         """
         Get the uint8 image from the object
-        :param img: input image
+        :param img: The input image
         :return: uint8 image
         """
         self.__convert2uint8(img)
         return self.__img_uint8
 
-    def average_tif(self, index1=None, index2=None, total_average=False):
+    def average_tif(self, index1=None, index2=None, total_average=False, save_path=None):
         """
         From multiple images obtain an average image of the input images
-        :param index1: First image of the series to be averaged
-        :param index2: Second image of the series to be averaged
-        :param total_average: if all image should be averaged
-        :return: averaged image
+        :param save_path:       Path to which the image will be saved at
+        :param index1:          First image of the series to be averaged
+        :param index2:          Second image of the series to be averaged
+        :param total_average:   Whether all image should be averaged
+        :return: The averaged image of the tif
         """
 
         if self.__array_length <= 0:
@@ -40,22 +43,27 @@ class TifReader:
         images = [img_tuple[0] for img_tuple in self.__tif_images]
 
         if total_average:
-            return np.mean(images, axis=0)
+            averaged_img = np.mean(images, axis=0)
 
         elif index1 is None and index2 is None:
-            return np.mean(images[-5:], axis=0)
+            averaged_img = np.mean(images[-5:], axis=0)
 
         else:
             if index1 is None or index2 is None:
-                raise Exception("Both index1 and index2 should be provided if 'all' is not True.")
+                raise Exception("Both index1 and index2 should be provided if 'total_average' is not True.")
 
             if index1 < 0 or index2 < 0 or index1 >= self.__array_length or index2 >= self.__array_length:
                 raise Exception("Indices out of range.")
 
             initial = min(index1, index2)
-            end = max(index1, index2) + 1  # +1 to include the end index
+            end = max(index1, index2) + 1
 
-            return np.mean(images[initial:end], axis=0)
+            averaged_img = np.mean(images[initial:end], axis=0)
+
+        if save_path:
+            imsave(self.__save_path, averaged_img.astype(np.float32))
+
+        return averaged_img
 
     def get_image(self, index):
         """
@@ -92,9 +100,9 @@ class TifReader:
         """
 
         if filter_type not in self.__sobel_operators:
-            return cv.filter2D(img, -1, self.__sobel_operators["sharpen"])
+            return cv2.filter2D(img, -1, self.__sobel_operators["sharpen"])
 
-        return cv.filter2D(img, -1, self.__sobel_operators[filter_type])
+        return cv2.filter2D(img, -1, self.__sobel_operators[filter_type])
 
     # Private Interface
 
