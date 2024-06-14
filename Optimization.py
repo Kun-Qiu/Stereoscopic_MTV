@@ -1,9 +1,3 @@
-import cv2
-import torch.optim as optim
-import OpticalFlow
-import TemplateMatching
-import matplotlib.pyplot as plt
-from Utility import Visualization as vis
 import torch
 import torch.nn.functional as F
 from Utility.generateDisplacedImage import translateImage
@@ -11,6 +5,11 @@ from Utility.generateDisplacedImage import translateImage
 
 class DisplacementFieldModel(torch.nn.Module):
     def __init__(self, initial_guess):
+        """
+        Default constructor for the optimization model
+
+        :param initial_guess:   The initial guess for the velocity field
+        """
         super(DisplacementFieldModel, self).__init__()
         self.u = torch.nn.Parameter(torch.tensor(initial_guess[:, :, 0],
                                                  dtype=torch.float32,
@@ -26,9 +25,10 @@ class DisplacementFieldModel(torch.nn.Module):
 def smoothness_constraint(u, v):
     """
     Smoothness constraint for the field based on Horn Schunck's algorithm
-    :param u: u component of displacement field
-    :param v: v component of displacement field
-    :return: loss based on the gradient across x and y for u and v
+
+    :param u:       u component of displacement field
+    :param v:       v component of displacement field
+    :return:        Loss based on the gradient across x and y for u and v
     """
     # Calculate squared differences
     du_x = u[:, :-1] - u[:, 1:]  # Difference on row elements
@@ -52,11 +52,13 @@ def intensity_constraint(source_img, target_img, predicted_field, lambda_intensi
     """
     Calculation of the loss function of the displacement field based on the
     intensity difference
-    :param source_img: source image
-    :param target_img: target image
-    :param predicted_field: predicted displacement field
-    :param lambda_intensity: regularizor coefficient for the intensity loss
-    :return: The loss related to intensity difference
+
+    :param source_img:          The source image (0)
+    :param target_img:          The target image (Delta t)
+    :param predicted_field:     Predicted displacement field
+    :param lambda_intensity:    Regularizor coefficient
+    :return:                    The mean square error related to intensity difference between
+                                warped image and the target image
     """
     predicted_image = translateImage(source_img, predicted_field).squeeze().permute(1, 2, 0)
     return lambda_intensity * torch.mean(torch.square(predicted_image - target_img))
@@ -66,10 +68,12 @@ def known_displace_constraint(optical_flow, template_flow, lambda_vel=10.0):
     """
     Calculation of the MSE loss function of the displacement field based on the
     difference between predicted field (optical) and the known field (template)
-    :param optical_flow: predicted flow field
-    :param template_flow: known flow field at intersections
-    :param lambda_vel: regularizor value
-    :return: The MSE loss associated with difference from predicted field to known field
+
+    :param optical_flow:        The predicted flow field
+    :param template_flow:       The known flow field at intersections (Template Matching)
+    :param lambda_vel:          Regularizotion coefficient
+    :return:                    The MSE loss associated with difference from
+                                predicted field to known field
     """
     squared_error = 0
 
@@ -93,16 +97,18 @@ def known_displace_constraint(optical_flow, template_flow, lambda_vel=10.0):
 def optimize_displacement_field(model, source_img, target_img, observed_displacement,
                                 optimizer, lambda_int, lambda_vel, num_epochs):
     """
-    The main training cycle for finding the solution that minimize the loss
-    :param lambda_int: Regularizor for intensity
-    :param lambda_vel: Regularizor for velocity
-    :param model: model
-    :param source_img: image @ t=0
-    :param target_img: image @ t=dt
-    :param observed_displacement: initial velocity field
-    :param optimizer: optimizer
-    :param num_epochs: number of epoch
-    :return: optimized velocity field
+    The main training cycle for finding the solution that minimize the
+    total loss function
+
+    :param lambda_int:              Regularization coefficient for intensity difference
+    :param lambda_vel:              Regularization coefficient for velocity difference
+    :param model:                   The model object in which to train
+    :param source_img:              Initial image of the flow @ t=0
+    :param target_img:              Displaced image @ t=dt
+    :param observed_displacement:   Initial velocity field (Template Matching)
+    :param optimizer:               Type of optimizer (Default=Adams)
+    :param num_epochs:              The number of epoch
+    :return:                        The optimized velocity field
     """
 
     predicted_displacement = None
@@ -142,46 +148,3 @@ def optimize_displacement_field(model, source_img, target_img, observed_displace
         print(f'Epoch [{epoch + 1}/{num_epochs}], Loss: {loss.item()}')
 
     return predicted_displacement
-
-
-# --------------------------------------------------------------------------------------
-
-"""
-Driver Code
-"""
-
-# Load original image and displacement field (example)
-source_path = 'Data/Source/frame_1.png'
-target_path = 'Data/Target/frame_1_2us.png'
-
-# Optical Flow
-of_object = OpticalFlow.OpticalFlow(source_path, target_path)
-of_object.calculate_optical_flow()
-of_object.visualize_flow()
-
-# Template Matching
-template_object = TemplateMatching.TemplateMatcher(source_path, target_path)
-template_object.match_template_driver()
-
-predicted = of_object.get_flow()
-observed = template_object.get_displacement()
-
-# ----------------------- Optimization ---------------------------------------------------------------
-# Initialize displacement field model and optimizer
-source_image = cv2.imread(source_path)
-target_image = cv2.imread(target_path)
-
-model = DisplacementFieldModel(predicted)
-optimizer = optim.Adam(model.parameters(), lr=1e-2)
-
-source_image_tensor = torch.tensor(source_image, dtype=torch.float32, requires_grad=True)
-target_image_tensor = torch.tensor(target_image, dtype=torch.float32, requires_grad=True)
-optimized_displacement = optimize_displacement_field(model, source_image_tensor,
-                                                     target_image_tensor,
-                                                     observed, optimizer,
-                                                     50, 300, 10000)
-
-vis.visualize_displacement(source_image, "Optimized Displacement", optimized_displacement)
-vis.visualize_displacement(source_image, "Initial Displacement", predicted)
-vis.visualize_displacement_difference(optimized_displacement, predicted, source_image)
-plt.show()
