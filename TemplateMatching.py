@@ -132,9 +132,9 @@ def match_template(raw_img, img, template, polygon, use_CUDA=False, use_cython=F
         nms_res = nms(np.array(boxes), np.array(scores), thresh=nms_thresh)
         print("detected objects: {}".format(len(nms_res)))
         for i in nms_res:
-            if polygon.contains(pl.Point(centers[i][0], centers[i][1])):
-                cv2.circle(img_temp, centers[i], 0, (0, 0, 255), 2)
-                real_centers.append(centers[i])
+            # if polygon.contains(pl.Point(centers[i][0], centers[i][1])):
+            cv2.circle(img_temp, centers[i], 0, (0, 0, 255), 2)
+            real_centers.append(centers[i])
 
     cv2.namedWindow("Match", cv2.WINDOW_NORMAL)
     cv2.resizeWindow("Match", 800, 800)
@@ -308,20 +308,19 @@ class TemplateMatcher:
         Driver function for the template matching algorithm using the OpenCV Module
         :return: None
         """
-        self._polygon = self.set_boundary()
+        # self._polygon = self.set_boundary()
         self._source_points = match_template(self._raw_source, self._source, self._template,
                                              self._polygon)
         self._target_points = match_template(self._raw_target, self._target, self._template,
                                              self._polygon)
-
         displacement_field = self.correspondence_position(self._source_points, self._target_points)
 
-        # Apply Filtering to reduce noise and outliers
-        radius = 2 * self._length
-        moving_average_validation_arr = moving_average_validation(displacement_field,
-                                                                  radius)
-        self._displacement = average_filter(moving_average_validation_arr,
-                                            radius)
+        # # Apply Filtering to reduce noise and outliers
+        # radius = 2 * self._length
+        # moving_average_validation_arr = moving_average_validation(displacement_field,
+        #                                                           radius)
+        # self._displacement = average_filter(moving_average_validation_arr,
+        #                                     radius)
         self.visualize_match(self._source_points, self._target_points, displacement_field)
 
     def get_boundary(self):

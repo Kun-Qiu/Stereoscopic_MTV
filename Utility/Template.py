@@ -101,7 +101,7 @@ class Template:
         cv2.imwrite(self.save_path, cropped_image)
 
         with open('length.txt', 'w') as f:
-            f.write(length)
+            f.write(str(length))
 
     def find_intersection(self):
         """
