@@ -115,7 +115,7 @@ class FeatureExtractor:
 
         # Lower -> usually lower threshold is more relaxed
         if threshold is None:
-            threshold = 0.9 * np.max(self.NCC)
+            threshold = 0.85 * np.max(self.NCC)
         else:
             threshold = threshold * np.max(self.NCC)
 
