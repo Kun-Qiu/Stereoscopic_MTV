@@ -311,7 +311,7 @@ class TemplateMatcher:
                                              self._polygon, threshold=0.85)
         displacement_field = self.correspondence_position(self._source_points, self._target_points)
 
-        # # Apply Filtering to reduce noise and outliers
+        # Apply Filtering to reduce noise and outliers
         radius = 2 * self._length
         moving_average_validation_arr = moving_average_validation(displacement_field,
                                                                   radius)
