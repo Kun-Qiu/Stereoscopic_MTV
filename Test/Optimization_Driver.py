@@ -37,8 +37,7 @@ source_image_tensor = torch.tensor(source_image, dtype=torch.float32, requires_g
 target_image_tensor = torch.tensor(target_image, dtype=torch.float32, requires_grad=True)
 optimized_displacement = optimize_displacement_field(model, source_image_tensor,
                                                      target_image_tensor,
-                                                     observed, optimizer,
-                                                     50, 25, 10000)
+                                                     observed, optimizer)
 
 vis.visualize_displacement(source_image, "Optimized Displacement", optimized_displacement)
 vis.visualize_displacement(source_image, "Initial Displacement", predicted)

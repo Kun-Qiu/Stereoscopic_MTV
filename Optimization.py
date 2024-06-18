@@ -22,13 +22,14 @@ class DisplacementFieldModel(torch.nn.Module):
         return torch.stack((self.u, self.v), dim=-1)
 
 
-def smoothness_constraint(u, v):
+def smoothness_constraint(u, v, lambda_smooth=100):
     """
     Smoothness constraint for the field based on Horn Schunck's algorithm
 
-    :param u:       u component of displacement field
-    :param v:       v component of displacement field
-    :return:        Loss based on the gradient across x and y for u and v
+    :param lambda_smooth:   Regularizor coefficient for smoothness of field
+    :param u:               u component of displacement field
+    :param v:               v component of displacement field
+    :return:                Loss based on the gradient across x and y for u and v
     """
     du_x = u[:, :-1] - u[:, 1:]  # Difference on row elements
     du_y = u[:-1, :] - u[1:, :]  # Difference on column elements
@@ -45,7 +46,7 @@ def smoothness_constraint(u, v):
     # Sum squared differences
     # smoothness_loss = 0.25 * torch.sum(du_x ** 2 + du_y ** 2 + dv_x ** 2 + dv_y ** 2)
     smoothness_loss = torch.sum((du_x + du_y) ** 2 + (dv_x + dv_y) ** 2)
-    return smoothness_loss
+    return lambda_smooth * smoothness_loss
 
 
 def intensity_constraint(source_img, target_img, predicted_field, lambda_intensity=10.0):
@@ -65,7 +66,7 @@ def intensity_constraint(source_img, target_img, predicted_field, lambda_intensi
     # Normalized the image
     predicted_img_norm = predicted_image / 255
     target_img_norm = target_img / 255
-    return lambda_intensity * torch.mean(torch.square(target_img_norm - predicted_img_norm))
+    return torch.mean(torch.square(target_img_norm - predicted_img_norm))
 
 
 def intensity_gradient_constraint(source_img, target_img, predicted_field, lambda_intensity_grad=10.0):
@@ -119,7 +120,7 @@ def known_displace_constraint(optical_flow, template_flow, lambda_vel=10.0):
 
 
 def optimize_displacement_field(model, source_img, target_img, observed_displacement,
-                                optimizer, lambda_int=100, lambda_int_grad=5, lambda_vel=25,
+                                optimizer, lambda_smooth=100, lambda_int_grad=5, lambda_vel=25,
                                 num_epochs=10000):
     """
     The main training cycle for finding the solution that minimize the
@@ -150,8 +151,7 @@ def optimize_displacement_field(model, source_img, target_img, observed_displace
         predicted_displacement = predicted_displacement.view(256, 256, 2)
         loss_intensity = intensity_constraint(source_img,
                                               target_img,
-                                              predicted_displacement,
-                                              lambda_intensity=lambda_int)
+                                              predicted_displacement)
 
         loss_intensity_gradient = intensity_gradient_constraint(source_img,
                                                                 target_img,
@@ -162,7 +162,8 @@ def optimize_displacement_field(model, source_img, target_img, observed_displace
                                                   observed_displacement,
                                                   lambda_vel=lambda_vel)
 
-        loss_smooth = smoothness_constraint(u_displacement, v_displacement)
+        loss_smooth = smoothness_constraint(u_displacement, v_displacement, lambda_smooth)
+
         loss = loss_smooth + loss_intensity + loss_displace + loss_intensity_gradient
 
         if torch.abs(loss - prevLoss) < 0.01:
