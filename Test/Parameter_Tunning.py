@@ -4,7 +4,6 @@ import OpticalFlow
 import TemplateMatching
 import numpy as np
 import cv2
-from Utility.Template import correspondence_displacement
 import Optimization as op
 import torch
 import torch.nn.functional as F
@@ -22,9 +21,9 @@ param_combinations = list(
 total_combination = len(param_combinations)
 
 # ------------- Load Images and Template -------------------------------
-source_path = 'Data/Source/frame_0.png'
-target_path = 'Data/Target/synethetic_1.png'
-template_path = 'Data/Template/frame_0_temp.png'
+source_path = '../Data/Source/frame_0.png'
+target_path = '../Data/Target/synethetic_1.png'
+template_path = '../Data/Template/frame_0_temp.png'
 
 source_image = cv2.imread(source_path)
 target_image = cv2.imread(target_path)
@@ -33,14 +32,11 @@ template_image = cv2.imread(template_path)
 of_object = OpticalFlow.OpticalFlow(source_path, target_path)
 of_object.calculate_optical_flow()
 
-source = TemplateMatching
-target = TemplateMatching
-source.match_template()
-target.match_template()
+template_object = TemplateMatching.TemplateMatcher(source_path, target_path, template_path)
+template_object.match_template_driver()
 
-correspondence = source.matching_displacement(target)
-observed = correspondence_displacement(correspondence)
 predicted = of_object.get_flow()
+observed = template_object.get_displacement()
 
 
 # ----------------------- Optimization ---------------------------------------------------------------
