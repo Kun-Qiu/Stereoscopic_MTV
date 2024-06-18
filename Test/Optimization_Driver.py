@@ -11,7 +11,7 @@ import torch
 
 # Load original image and displacement field (example)
 source_path = '../Data/Source/source_avg.png'
-target_path = '../Data/Synthetic Target/synthetic_0.png'
+target_path = '../Data/Synthetic Target/img1.png'
 template_path = '../Data/Template/frame_0_temp.png'
 
 # Optical Flow
@@ -38,7 +38,7 @@ target_image_tensor = torch.tensor(target_image, dtype=torch.float32, requires_g
 optimized_displacement = optimize_displacement_field(model, source_image_tensor,
                                                      target_image_tensor,
                                                      observed, optimizer,
-                                                     50, 300, 10000)
+                                                     50, 25, 10000)
 
 vis.visualize_displacement(source_image, "Optimized Displacement", optimized_displacement)
 vis.visualize_displacement(source_image, "Initial Displacement", predicted)
