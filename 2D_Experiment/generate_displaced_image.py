@@ -73,7 +73,7 @@ def create_grid(image_size, fwhm, spacing, angle, line_intensity=1.0, snr=20):
     radians = np.deg2rad(angle)
 
     # Draw lines at +60 degrees
-    for x in range(-w, w, spacing):
+    for x in range(-w, 2 * w, spacing):
         y1 = 0
         x1 = x
         y2 = h
@@ -106,64 +106,74 @@ def translate_image(image, x_translate=0, y_translate=0):
     h, w = image.shape[:2]
     translation_matrix = np.float32([[1, 0, x_translate], [0, 1, y_translate]])
     translated_image = cv2.warpAffine(image, translation_matrix, (w, h))
+
+    # Displacement Field
+    displacement_field = np.zeros((*image.shape, 2))
+    displacement_field[..., 0] = x_translate
+    displacement_field[..., 1] = y_translate
+
     return translated_image
 
 
-def rotational_displacement_transform(image, max_translation=20, max_rotation=0.4):
-    """
-    Apply a rotational displacement to the input image.
+def parabolic_transform(image, factor=0.0002):
+    height, width = image.shape[:2]
+    center_x, center_y = width // 2, height // 2
 
-    :param image:               The input image of which the transformation is performed
-    :param max_translation:     Number of pixels for translational transformation
-    :param max_rotation:        Number of degrees for rotational transformation
-    :return:                    Simulated image representing a Poiseuille flow
-    """
-    image_array = np.array(image)
+    output_image = np.zeros_like(image)
+    displacement_field = np.zeros((height, width, 2))
 
-    def rotational_displacement(x, y, translation, rotation):
-        # Center the coordinates
-        x_center = x.max() / 2
-        y_center = y.max() / 2
-        x_centered = x - x_center
-        y_centered = y - y_center
+    for y in range(height):
+        for x in range(width):
+            # Distance of the pixel from the center
+            dx, dy = x - center_x, y - center_y
+            distance = np.sqrt(dx ** 2 + dy ** 2)
 
-        # Calculate the radius and angle for each point
-        radius = np.sqrt(x_centered ** 2 + y_centered ** 2)
-        angle = np.arctan2(y_centered, x_centered)
+            # Compute the rotation angle proportional to the distance
+            angle = factor * distance
 
-        # Apply the rotational displacement
-        angle_new = angle + rotation * (radius / radius.max())
-        radius_new = radius + translation * (radius / radius.max())
+            # Compute the perpendicular rotation
+            cos_angle = np.cos(angle)
+            sin_angle = np.sin(angle)
 
-        # Convert back to Cartesian coordinates
-        x_new = radius_new * np.cos(angle_new) + x_center
-        y_new = radius_new * np.sin(angle_new) + y_center
+            # Perpendicular direction to the radial vector (rotated by 90 degrees)
+            perpendicular_dx = -dy
+            perpendicular_dy = dx
 
-        return x_new, y_new
+            # Apply the perpendicular rotation
+            new_x = int(center_x + cos_angle * perpendicular_dx - sin_angle * perpendicular_dy)
+            new_y = int(center_y + sin_angle * perpendicular_dx + cos_angle * perpendicular_dy)
 
-    # Get the original coordinates
-    height, width = image_array.shape
-    x = np.arange(width)
-    y = np.arange(height)
-    x, y = np.meshgrid(x, y)
+            displacement_field[y, x] = [new_x - x, new_y - y]
 
-    # Flatten the coordinates
-    x_flat = x.flatten()
-    y_flat = y.flatten()
+            # Only use valid coordinates within the image bounds
+            if 0 <= new_x < width and 0 <= new_y < height:
+                output_image[y, x] = image[new_y, new_x]
 
-    # Apply the rotational displacement
-    x_new, y_new = rotational_displacement(x_flat, y_flat, max_translation, max_rotation)
+    magnitude = np.linalg.norm(displacement_field, axis=-1)
 
-    # Interpolate the displaced image
-    displaced_image = griddata(
-        (x_flat, y_flat),
-        image_array.flatten(),
-        (x_new, y_new),
-        method='linear',
-        fill_value=0
-    ).reshape((height, width))
+    # Normalize displacement field to unit vectors, avoid division by zero
+    displacement_field_unit = np.zeros_like(displacement_field)
+    nonzero_magnitude = magnitude > 0
+    displacement_field_unit[nonzero_magnitude] = (displacement_field[nonzero_magnitude] /
+                                                  np.expand_dims(magnitude[nonzero_magnitude], axis=-1))
 
-    return displaced_image
+    # Plotting the quiver plot
+    plt.figure(figsize=(8, 6))
+
+    # Create a grid of points to plot
+    X, Y = np.meshgrid(np.arange(0, width, 10), np.arange(0, height, 10))
+    U = displacement_field_unit[::10, ::10, 0]
+    V = displacement_field_unit[::10, ::10, 1]
+    C = magnitude[::10, ::10]  # Magnitude for color
+
+    plt.quiver(X, Y, U, V, C, cmap='viridis', scale=20, scale_units='inches')
+    plt.colorbar(label='Magnitude')
+    plt.title('Unit Vector Displacement Field')
+    plt.gca().invert_yaxis()  # Invert y-axis to match image coordinates
+    plt.axis('equal')
+    plt.show()
+
+    return output_image
 
 
 # Define the parameters
@@ -173,9 +183,9 @@ angle = 60  # Angle in degrees for the intersecting lines
 image_size = (512, 512)  # Size of the image
 
 # Create the grid image
-image = create_grid(image_size, fwhm, spacing, angle, snr=1)
-translated_image = translate_image(image, x_translate=20, y_translate=20)
-rotated_image = rotational_displacement_transform(image)
+image = create_grid(image_size, fwhm, spacing, angle, snr=8)
+translated_image = translate_image(image, x_translate=5, y_translate=5)
+rotated_image = parabolic_transform(image)
 
 # Display the image
 plt.figure(figsize=(10, 5))
@@ -201,3 +211,4 @@ plt.show()
 # Save the image if needed
 cv2.imwrite('gaussian_grid.png', image)
 cv2.imwrite('gaussian_grid_trans.png', image)
+cv2.imwrite('Poiseuille flow.png', rotated_image)
