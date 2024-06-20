@@ -115,39 +115,59 @@ def translate_image(image, x_translate=0, y_translate=0):
     return translated_image
 
 
-def parabolic_transform(image, factor=0.0002):
-    height, width = image.shape[:2]
-    center_x, center_y = width // 2, height // 2
+def rotate_points(points, center, angle):
+    # Create a rotation matrix
+    cos_angle = np.cos(angle)
+    sin_angle = np.sin(angle)
+    rotation_matrix = np.array([[cos_angle, -sin_angle], [sin_angle, cos_angle]])
 
-    output_image = np.zeros_like(image)
+    # Translate points to origin
+    translated_points = points - center
+
+    # Apply rotation
+    rotated_points = np.dot(translated_points, rotation_matrix.T)
+
+    # Translate points back
+    result_points = rotated_points + center
+
+    return result_points
+
+
+def simulate_rotational_flow(image, max_rotation):
+    # Load the image
+    height, width = image.shape[:2]
+    center = np.array([width // 2, height // 2])
+
+    # Create output image
     displacement_field = np.zeros((height, width, 2))
 
-    for y in range(height):
-        for x in range(width):
-            # Distance of the pixel from the center
-            dx, dy = x - center_x, y - center_y
-            distance = np.sqrt(dx ** 2 + dy ** 2)
+    # Generate grid of points
+    y_coords, x_coords = np.indices((height, width))
+    points = np.stack([x_coords.ravel(), y_coords.ravel()], axis=-1)
 
-            # Compute the rotation angle proportional to the distance
-            angle = factor * distance
+    # Compute distances to center
+    distances_to_center = np.linalg.norm(points - center, axis=-1)
+    max_distance = np.linalg.norm(center)
+    relative_distances = distances_to_center / max_distance
+    angles = max_rotation * relative_distances
 
-            # Compute the perpendicular rotation
-            cos_angle = np.cos(angle)
-            sin_angle = np.sin(angle)
+    # Apply rotation
+    rotated_points = np.zeros_like(points, dtype=float)
+    for i, angle in enumerate(angles):
+        rotated_points[i] = rotate_points(points[i], center, angle)
 
-            # Perpendicular direction to the radial vector (rotated by 90 degrees)
-            perpendicular_dx = -dy
-            perpendicular_dy = dx
+    # Map points back to image grid with nearest neighbor interpolation
+    rotated_points = rotated_points.astype(int)
+    rotated_points[:, 0] = np.clip(rotated_points[:, 0], 0, width - 1)
+    rotated_points[:, 1] = np.clip(rotated_points[:, 1], 0, height - 1)
 
-            # Apply the perpendicular rotation
-            new_x = int(center_x + cos_angle * perpendicular_dx - sin_angle * perpendicular_dy)
-            new_y = int(center_y + sin_angle * perpendicular_dx + cos_angle * perpendicular_dy)
+    x_coords_rotated = rotated_points[:, 0].reshape(height, width)
+    y_coords_rotated = rotated_points[:, 1].reshape(height, width)
+    output_image = image[y_coords_rotated, x_coords_rotated]
 
-            displacement_field[y, x] = [new_x - x, new_y - y]
-
-            # Only use valid coordinates within the image bounds
-            if 0 <= new_x < width and 0 <= new_y < height:
-                output_image[y, x] = image[new_y, new_x]
+    # Calculate displacement field
+    displacement_field[:, :, 0] = x_coords_rotated - x_coords
+    displacement_field[:, :, 1] = y_coords_rotated - y_coords
 
     magnitude = np.linalg.norm(displacement_field, axis=-1)
 
@@ -180,12 +200,12 @@ def parabolic_transform(image, factor=0.0002):
 fwhm = 4  # Full width at half maximum for the Gaussian lines
 spacing = 25  # Spacing between the lines
 angle = 60  # Angle in degrees for the intersecting lines
-image_size = (512, 512)  # Size of the image
+image_size = (256, 256)  # Size of the image
 
 # Create the grid image
 image = create_grid(image_size, fwhm, spacing, angle, snr=8)
 translated_image = translate_image(image, x_translate=5, y_translate=5)
-rotated_image = parabolic_transform(image)
+rotated_image = simulate_rotational_flow(image, 0.1)
 
 # Display the image
 plt.figure(figsize=(10, 5))
@@ -197,18 +217,18 @@ plt.axis('off')
 
 plt.subplot(132)
 plt.imshow(translated_image, cmap='gray')
-plt.title('Translated Grid Image')
+plt.title('Translational Transformation')
 plt.axis('off')
 
 plt.subplot(133)
 plt.imshow(rotated_image, cmap='gray')
-plt.title('Parabolic Transdformation Grid Image')
+plt.title('Rotational Transformation')
 plt.axis('off')
 
 plt.tight_layout()
 plt.show()
 
 # Save the image if needed
-cv2.imwrite('gaussian_grid.png', image)
-cv2.imwrite('gaussian_grid_trans.png', image)
-cv2.imwrite('Poiseuille flow.png', rotated_image)
+cv2.imwrite('Gaussian Grid.png', image)
+cv2.imwrite('Translational Flow.png', translated_image)
+cv2.imwrite('Rotational Flow.png', rotated_image)
