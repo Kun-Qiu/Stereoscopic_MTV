@@ -1,7 +1,7 @@
 import numpy as np
 import cv2
-import matplotlib.pyplot as plt
-from scipy.interpolate import griddata
+import random
+import os
 
 
 def add_noise(image_array, snr):
@@ -100,7 +100,7 @@ def translate_image(image, x_translate=0, y_translate=0):
     :param image:           The input image of which the transformation is performed
     :param x_translate:     The number of pixel to translate in the x direction
     :param y_translate:     The number of pixel to translate in the y direction
-    :return:                The transformed image
+    :return:                The translated image along with the displacement field
     """
 
     h, w = image.shape[:2]
@@ -112,10 +112,18 @@ def translate_image(image, x_translate=0, y_translate=0):
     displacement_field[..., 0] = x_translate
     displacement_field[..., 1] = y_translate
 
-    return translated_image
+    return translated_image, displacement_field
 
 
 def rotate_points(points, center, angle):
+    """
+    Rotate a set of points around a center by a certain angle
+
+    :param points:      The points that the transformation is applied to
+    :param center:      The center of the vortex
+    :param angle:       Angle of rotation
+    :return:            Set of points after the rotation
+    """
     # Create a rotation matrix
     cos_angle = np.cos(angle)
     sin_angle = np.sin(angle)
@@ -134,16 +142,21 @@ def rotate_points(points, center, angle):
 
 
 def simulate_rotational_flow(image, max_rotation):
-    # Load the image
+    """
+    Transform an image by a maximum angle
+
+    :param image:           The input image
+    :param max_rotation:    The maximum rotation in radian
+    :return:                An rotated image of the laser along with the displacement field
+    """
+
     height, width = image.shape[:2]
     center = np.array([width // 2, height // 2])
-
-    # Create output image
     displacement_field = np.zeros((height, width, 2))
 
-    # Generate grid of points
     y_coords, x_coords = np.indices((height, width))
     points = np.stack([x_coords.ravel(), y_coords.ravel()], axis=-1)
+    source_points = points.reshape((height, width, 2))
 
     # Compute distances to center
     distances_to_center = np.linalg.norm(points - center, axis=-1)
@@ -166,69 +179,49 @@ def simulate_rotational_flow(image, max_rotation):
     output_image = image[y_coords_rotated, x_coords_rotated]
 
     # Calculate displacement field
-    displacement_field[:, :, 0] = x_coords_rotated - x_coords
-    displacement_field[:, :, 1] = y_coords_rotated - y_coords
+    displacement_field[:, :, 0] = x_coords_rotated - source_points[:, :, 0]
+    displacement_field[:, :, 1] = y_coords_rotated - source_points[:, :, 1]
 
-    magnitude = np.linalg.norm(displacement_field, axis=-1)
+    return output_image, displacement_field
 
-    # Normalize displacement field to unit vectors, avoid division by zero
-    displacement_field_unit = np.zeros_like(displacement_field)
-    nonzero_magnitude = magnitude > 0
-    displacement_field_unit[nonzero_magnitude] = (displacement_field[nonzero_magnitude] /
-                                                  np.expand_dims(magnitude[nonzero_magnitude], axis=-1))
 
-    # Plotting the quiver plot
-    plt.figure(figsize=(8, 6))
-
-    # Create a grid of points to plot
-    X, Y = np.meshgrid(np.arange(0, width, 10), np.arange(0, height, 10))
-    U = displacement_field_unit[::10, ::10, 0]
-    V = displacement_field_unit[::10, ::10, 1]
-    C = magnitude[::10, ::10]  # Magnitude for color
-
-    plt.quiver(X, Y, U, V, C, cmap='viridis', scale=20, scale_units='inches')
-    plt.colorbar(label='Magnitude')
-    plt.title('Unit Vector Displacement Field')
-    plt.gca().invert_yaxis()  # Invert y-axis to match image coordinates
-    plt.axis('equal')
-    plt.show()
-
-    return output_image
-
+# ------------------------------------- Main Loop -------------------------------------------------------------
 
 # Define the parameters
 fwhm = 4  # Full width at half maximum for the Gaussian lines
 spacing = 25  # Spacing between the lines
-angle = 60  # Angle in degrees for the intersecting lines
+angle = 120  # Angle in degrees for the intersecting lines
 image_size = (256, 256)  # Size of the image
 
-# Create the grid image
-image = create_grid(image_size, fwhm, spacing, angle, snr=8)
-translated_image = translate_image(image, x_translate=5, y_translate=5)
-rotated_image = simulate_rotational_flow(image, 0.1)
+snr_values = [1, 2, 4, 8, 16]
+num_images_per_snr = 10
+output_dir = "Experiment"
+os.makedirs(output_dir, exist_ok=True)
 
-# Display the image
-plt.figure(figsize=(10, 5))
+for snr in snr_values:
+    snr_folder = os.path.join(output_dir, f"SNR_{snr}")
+    os.makedirs(snr_folder, exist_ok=True)
 
-plt.subplot(131)
-plt.imshow(image, cmap='gray')
-plt.title('Gaussian Grid Image')
-plt.axis('off')
+    for i in range(num_images_per_snr):
+        grid_folder = os.path.join(snr_folder, f"Set_{i}")
+        os.makedirs(grid_folder, exist_ok=True)  # Ensure the folder is created
 
-plt.subplot(132)
-plt.imshow(translated_image, cmap='gray')
-plt.title('Translational Transformation')
-plt.axis('off')
+        image = create_grid(image_size, fwhm, spacing, angle, snr)
+        translated_image, translated_field = translate_image(
+            image,
+            x_translate=random.randint(0, 10),
+            y_translate=random.randint(0, 10)
+        )
+        rotated_image, rotated_field = simulate_rotational_flow(
+            image,
+            max_rotation=random.uniform(0, 0.2)
+        )
 
-plt.subplot(133)
-plt.imshow(rotated_image, cmap='gray')
-plt.title('Rotational Transformation')
-plt.axis('off')
+        # Save images
+        cv2.imwrite(os.path.join(grid_folder, f"Gaussian_Grid_Image_Set_{i}.png"), image)
+        cv2.imwrite(os.path.join(grid_folder, f"Translational_Flow_Image_Set_{i}.png"), translated_image)
+        cv2.imwrite(os.path.join(grid_folder, f"Rotational_Flow_Image_Set_{i}.png"), rotated_image)
 
-plt.tight_layout()
-plt.show()
-
-# Save the image if needed
-cv2.imwrite('Gaussian Grid.png', image)
-cv2.imwrite('Translational Flow.png', translated_image)
-cv2.imwrite('Rotational Flow.png', rotated_image)
+        # Save displacement fields
+        np.save(os.path.join(grid_folder, f"Translated_Field_Set_{i}.npy"), translated_field)
+        np.save(os.path.join(grid_folder, f"Rotated_Field_Set_{i}.npy"), rotated_field)
