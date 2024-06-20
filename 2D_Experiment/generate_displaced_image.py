@@ -2,6 +2,7 @@ import numpy as np
 import cv2
 import random
 import os
+import matplotlib.pyplot as plt
 
 
 def add_noise(image_array, snr):
@@ -206,7 +207,7 @@ for snr in snr_values:
         grid_folder = os.path.join(snr_folder, f"Set_{i}")
         os.makedirs(grid_folder, exist_ok=True)  # Ensure the folder is created
 
-        image = create_grid(image_size, fwhm, spacing, angle, snr)
+        image = create_grid(image_size, fwhm, spacing, angle, line_intensity=2, snr=snr)
         translated_image, translated_field = translate_image(
             image,
             x_translate=random.randint(0, 10),
