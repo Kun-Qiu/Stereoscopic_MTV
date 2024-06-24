@@ -1,6 +1,6 @@
 import torch
 import torch.nn.functional as F
-from Utility.generateDisplacedImage import translateImage
+from Utility.Optimization_Utility import translateImage
 
 
 class DisplacementFieldModel(torch.nn.Module):
@@ -43,13 +43,13 @@ def smoothness_constraint(u, v, lambda_smooth=100):
     dv_x = F.pad(dv_x, (0, 1), mode='constant', value=0)
     dv_y = F.pad(dv_y, (0, 0, 0, 1), mode='constant', value=0)
 
-    # Sum squared differences
-    # smoothness_loss = 0.25 * torch.sum(du_x ** 2 + du_y ** 2 + dv_x ** 2 + dv_y ** 2)
-    smoothness_loss = torch.sum((du_x + du_y) ** 2 + (dv_x + dv_y) ** 2)
+    smoothness_loss = torch.mean((du_x + du_y) ** 2 + (dv_x + dv_y) ** 2)
+
+    # smoothness_loss = torch.sum((du_x + du_y) ** 2 + (dv_x + dv_y) ** 2)
     return lambda_smooth * smoothness_loss
 
 
-def intensity_constraint(source_img, target_img, predicted_field, lambda_intensity=10.0):
+def intensity_constraint(source_img, target_img, predicted_field):
     """
     Calculation of the loss function of the displacement field based on the
     intensity difference
@@ -57,21 +57,28 @@ def intensity_constraint(source_img, target_img, predicted_field, lambda_intensi
     :param source_img:          The source image (0)
     :param target_img:          The target image (Delta t)
     :param predicted_field:     Predicted displacement field
-    :param lambda_intensity:    Regularizor coefficient
     :return:                    The mean square error related to intensity difference between
                                 warped image and the target image
     """
     predicted_image = translateImage(source_img, predicted_field).squeeze().permute(1, 2, 0)
 
-    # Normalized the image
-    predicted_img_norm = predicted_image / 255
-    target_img_norm = target_img / 255
+    # Ensure the predicted_image has the same shape as target_img
+    if predicted_image.shape != target_img.shape:
+        raise ValueError(f"Shape mismatch: predicted_image shape {predicted_image.shape} "
+                         f"does not match target_img shape {target_img.shape}")
+
+    predicted_img_norm = predicted_image
+    target_img_norm = target_img
+
+    # return torch.sum(torch.square(target_img_norm - predicted_img_norm))
     return torch.mean(torch.square(target_img_norm - predicted_img_norm))
 
 
 def intensity_gradient_constraint(source_img, target_img, predicted_field, lambda_intensity_grad=10.0):
     """
-    
+    Constraint based on the intensity gradient of the image. For a predicted image to be similar to the
+    target image, the intensity gradient must be similar.
+
     :param source_img:              The source image (0)
     :param target_img:              The target image (Delta t)
     :param predicted_field:         Predicted displacement field
@@ -80,13 +87,22 @@ def intensity_gradient_constraint(source_img, target_img, predicted_field, lambd
                                     warped image and the target image
     """
     predicted_image = translateImage(source_img, predicted_field).squeeze().permute(1, 2, 0)
+
+    # Ensure the predicted_image has the same shape as target_img
+    if predicted_image.shape != target_img.shape:
+        raise ValueError(f"Shape mismatch: predicted_image shape {predicted_image.shape} "
+                         f"does not match target_img shape {target_img.shape}")
+
     I_predicted = torch.gradient(predicted_image, spacing=1.0)
     I_target = torch.gradient(target_img, spacing=1.0)
 
     div_predicted = I_predicted[0] + I_predicted[1]
     div_target = I_target[0] + I_target[1]
 
-    return lambda_intensity_grad * torch.mean((torch.abs(div_predicted - div_target)) ** 2)
+    loss_intensity_grad = torch.mean((torch.abs(div_predicted - div_target)) ** 2)
+    # loss_intensity_grad = torch.sum((torch.abs(div_predicted - div_target)) ** 2)
+
+    return lambda_intensity_grad * loss_intensity_grad
 
 
 def known_displace_constraint(optical_flow, template_flow, lambda_vel=10.0):
@@ -116,7 +132,8 @@ def known_displace_constraint(optical_flow, template_flow, lambda_vel=10.0):
 
         squared_error += (x_diff_squared + y_diff_squared)
 
-    return lambda_vel * torch.abs(squared_error)
+    return lambda_vel * (torch.abs(squared_error) / len(template_flow))
+    # return lambda_vel * (torch.abs(squared_error))
 
 
 def optimize_displacement_field(model, source_img, target_img, observed_displacement,
@@ -126,7 +143,7 @@ def optimize_displacement_field(model, source_img, target_img, observed_displace
     The main training cycle for finding the solution that minimize the
     total loss function
 
-    :param lambda_int:              Regularization coefficient for intensity difference
+    :param lambda_smooth:           Regularization coefficient for smoothness of the field
     :param lambda_int_grad:         Regularization coefficient for intensity gradient across images
     :param lambda_vel:              Regularization coefficient for velocity difference
     :param model:                   The model object in which to train
@@ -175,6 +192,8 @@ def optimize_displacement_field(model, source_img, target_img, observed_displace
         optimizer.step()
         optimizer.zero_grad()
         epoch = epoch + 1
+        print(f"intensity: {loss_intensity}, intensity gradient: {loss_intensity_gradient}, "
+              f"displace: {loss_displace}, smooth: {loss_smooth}")
         print(f'Epoch [{epoch + 1}/{num_epochs}], Loss: {loss.item()}')
 
     return predicted_displacement

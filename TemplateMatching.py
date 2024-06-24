@@ -151,25 +151,28 @@ def match_template(raw_img, img, template, polygon, use_CUDA=False, use_cython=F
         nms_res = nms(np.array(boxes), np.array(scores), thresh=nms_thresh)
         print("detected objects: {}".format(len(nms_res)))
         for i in nms_res:
-            if polygon.contains(pl.Point(centers[i][0], centers[i][1])):
-                cv2.circle(img_temp, centers[i], 0, (0, 0, 255), 2)
-                real_centers.append(centers[i])
+            # if polygon.contains(pl.Point(centers[i][0], centers[i][1])):
+            cv2.circle(img_temp, centers[i], 0, (0, 0, 255), 2)
+            real_centers.append(centers[i])
 
-    cv2.namedWindow("Match", cv2.WINDOW_NORMAL)
-    cv2.resizeWindow("Match", 800, 800)
-    cv2.imshow("Match", img_temp)
-    cv2.waitKey()
+    # cv2.namedWindow("Match", cv2.WINDOW_NORMAL)
+    # cv2.resizeWindow("Match", 800, 800)
+    # cv2.imshow("Match", img_temp)
+    # cv2.waitKey()
     return real_centers
 
 
 class TemplateMatcher:
-    def __init__(self, source_image_path, target_image_path, template_path):
+    def __init__(self, source_image_path, target_image_path, template_path,
+                 thresh_source=0.8, thresh_target=0.8):
         """
         Default Constructor for Template Matcher
 
         :param source_image_path:       Path to the source image
         :param target_image_path:       Path to the target image
         :param template_path:           Path to the template image
+        :param thresh_source:           Correlation threshold for source image (Default=0.8)
+        :param thresh_target:           Correlation threshold for target image (Default=0.8)
         :return:                        Returns template matching object
         """
 
@@ -194,6 +197,8 @@ class TemplateMatcher:
         self._polygon = None
         self._displacement = None
         self._length = np.loadtxt('../length.txt')
+        self._thresh_source = thresh_source
+        self._thresh_target = thresh_target
 
     def set_boundary(self):
         """
@@ -286,12 +291,14 @@ class TemplateMatcher:
                                            (target_point[1] - source_point[1]) ** 2))
 
             # Find the minimum distance for the current source point
-            min_index = np.argmin(dist_source)
-            if dist_source[min_index] <= distance_thresh:
-                x_displace = target_tmp[min_index][0] - source_point[0]
-                y_displace = target_tmp[min_index][1] - source_point[1]
-                correspondence.append((source_point, x_displace, y_displace))
-                target_tmp.pop(min_index)
+            min_index = 0
+            if len(dist_source) > 0:
+                min_index = np.argmin(dist_source)
+                if dist_source[min_index] <= distance_thresh:
+                    x_displace = target_tmp[min_index][0] - source_point[0]
+                    y_displace = target_tmp[min_index][1] - source_point[1]
+                    correspondence.append((source_point, x_displace, y_displace))
+                    target_tmp.pop(min_index)
             else:
                 correspondence.append((source_point, 0, 0))
 
@@ -304,11 +311,13 @@ class TemplateMatcher:
 
         The template matching driver function
         """
-        self._polygon = self.set_boundary()
+        # self._polygon = self.set_boundary()
+        print("Starting Source Matching")
         self._source_points = match_template(self._raw_source, self._source, self._template,
-                                             self._polygon, threshold=0.90)
+                                             self._polygon, threshold=self._thresh_source)
+        print("Starting Target Matching")
         self._target_points = match_template(self._raw_target, self._target, self._template,
-                                             self._polygon, threshold=0.85)
+                                             self._polygon, threshold=self._thresh_target)
         displacement_field = self.correspondence_position(self._source_points, self._target_points)
 
         # Apply Filtering to reduce noise and outliers

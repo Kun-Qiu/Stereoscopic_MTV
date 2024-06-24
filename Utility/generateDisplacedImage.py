@@ -2,8 +2,6 @@ import cv2
 import numpy as np
 import argparse
 import matplotlib.pyplot as plt
-import torch.nn.functional as F
-import torch
 
 
 def generatingDisplacement(img_size, dx, dy, mode):
@@ -86,34 +84,6 @@ def displace_image(input_img, min_value, max_value, mode='constant'):
                 displaced_image[new_x, new_y] = image[x, y]
 
     return displacement_field, displaced_image
-
-
-# Used for PyTorch
-def translateImage(image, translateField):
-    """
-    Displace the source image by the displacement field pixel by pixel
-    :param image: source image
-    :param translateField: displacement field
-    :return: Displaced image
-    """
-    length, width, channel = image.shape
-
-    size = [length, width]
-    x_r = torch.arange(size[0])
-    y_r = torch.arange(size[1])
-    x_grid, y_grid = torch.meshgrid(x_r, y_r)  # create the original grid
-
-    field_x = translateField[:, :, 1]  # obtain the translation field for x and y independently
-    field_y = translateField[:, :, 0]
-
-    translate_x = (x_grid + field_x) / size[0] * 2 - 1  # Translate the original coordinate space
-    translate_y = (y_grid - field_y) / size[1] * 2 - 1
-
-    tFieldXY = torch.stack((translate_y, translate_x)).permute(1, 2, 0).unsqueeze(0)
-
-    img = image.permute(2, 0, 1).unsqueeze(0)
-    output = F.grid_sample(img, tFieldXY, padding_mode='zeros')
-    return output
 
 
 def main(input_img, target_path, min_value, max_value, mode):

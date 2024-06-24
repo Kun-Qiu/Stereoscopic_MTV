@@ -19,7 +19,7 @@ def visualize_displacement(image, name, field):
     length, height, color = image.shape
 
     plt.figure(figsize=(8, 6))
-    plt.imshow(image, cmap='gray')
+    # plt.imshow(image, cmap='gray')
 
     step = 10
     plt.quiver(range(0, length, 10), range(0, height, 10),
