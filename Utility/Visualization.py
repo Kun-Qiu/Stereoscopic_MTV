@@ -3,12 +3,13 @@ import torch
 import numpy as np
 
 
-def visualize_displacement(image, name, field):
+def visualize_displacement(image, name, field, save_path=None):
     """
     Visualize the displacement vectors on top of the original image
-    :param image: Original image
-    :param name: Name for the plot
-    :param field: Displacement field
+    :param image:       Original image
+    :param name:        Name for the plot
+    :param save_path:   Path in which the figures will be saved
+    :param field:       The displacement field
     """
     field = torch.tensor(field)
     magnitudes = torch.sqrt(torch.sum(field ** 2, dim=2))
@@ -19,7 +20,6 @@ def visualize_displacement(image, name, field):
     length, height, color = image.shape
 
     plt.figure(figsize=(8, 6))
-    # plt.imshow(image, cmap='gray')
 
     step = 10
     plt.quiver(range(0, length, 10), range(0, height, 10),
@@ -31,13 +31,18 @@ def visualize_displacement(image, name, field):
     plt.xlabel('X')
     plt.ylabel('Y')
 
+    if save_path:
+        plt.savefig(save_path)
+        print(f"Figure saved to {save_path}")
 
-def visualize_displacement_difference(field1, field2, image):
+
+def visualize_displacement_difference(field1, field2, image, save_path=None):
     """
-    Visualize the difference between two displacement fields overlayed on the original image
-    :param field1: First displacement field
-    :param field2: Second displacement field
-    :param image: Image data
+    Visualize the difference between two displacement fields overlay onto the original image
+    :param field1:      First displacement field
+    :param field2:      Second displacement field
+    :param save_path:   Path in which the figures will be saved
+    :param image:       Image data
     """
     # Compute the difference field
     if torch.is_tensor(field1):
@@ -57,3 +62,7 @@ def visualize_displacement_difference(field1, field2, image):
     plt.title('Displacement Field Difference Overlayed on Image')
     plt.axis('off')
     plt.gca().invert_yaxis()
+
+    if save_path:
+        plt.savefig(save_path)
+        print(f"Figure saved to {save_path}")

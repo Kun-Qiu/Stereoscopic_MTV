@@ -12,8 +12,8 @@ class OpticalFlow:
 
     def calculate_optical_flow(self):
         # Read source and target images
-        source_img = denoised_image(self._SOURCE_PATH)
-        target_img = denoised_image(self._TARGET_PATH)
+        source_img = denoised_image(cv2.imread(self._SOURCE_PATH, cv2.IMREAD_GRAYSCALE))
+        target_img = denoised_image(cv2.imread(self._TARGET_PATH, cv2.IMREAD_GRAYSCALE))
 
         # Calculate optical flow
         self._flow = cv2.calcOpticalFlowFarneback(source_img, target_img, None,

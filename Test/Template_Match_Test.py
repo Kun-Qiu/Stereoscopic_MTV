@@ -48,8 +48,8 @@ for value in snr_values:
 
             # Initialize template matchers
             template_object = TemplateMatching.TemplateMatcher(source_path, translate_path, template_path,
-                                                               thresh_source=thresh,
-                                                               thresh_target=thresh)
+                                                               thresh_source=0.6,
+                                                               thresh_target=0.6)
             template_object.match_template_driver()
 
 # displacement = template_object.get_displacement()

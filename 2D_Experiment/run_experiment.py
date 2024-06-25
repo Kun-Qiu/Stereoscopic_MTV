@@ -1,18 +1,24 @@
 import cv2
-import torch.optim as optim
 import OpticalFlow
 import TemplateMatching
-import matplotlib.pyplot as plt
+import torch
+import os
+
+from Optimization import optimize_displacement_field
 from Utility import Visualization as vis
 from Utility import Template as tp
-import Optimization as op
-from Optimization import optimize_displacement_field
-import torch
+
 import numpy as np
-import os
+import Optimization as op
+import torch.optim as optim
 
 
 def convert_tensor_numpy(input_tensor):
+    """
+    Convert PyTorch tensor to numpy array
+    :param input_tensor:    Input torch tensor
+    :return:                Numpy array
+    """
     if torch.is_tensor(input_tensor):
         if input_tensor.requires_grad:
             return input_tensor.detach().numpy()
@@ -22,6 +28,12 @@ def convert_tensor_numpy(input_tensor):
 
 
 def cosine_similarity(vec1, vec2):
+    """
+    Cosine similarity between two vectors of shape (1 , n)
+    :param vec1:    First vector
+    :param vec2:    Second vector
+    :return:        Similarity (scalar) between two vectors
+    """
     vec1 = convert_tensor_numpy(vec1)
     vec2 = convert_tensor_numpy(vec2)
 
@@ -115,13 +127,14 @@ def moving_average_filter(input_tensor, window_size, threshold):
 
 
 def test_optimization_function(source_path, target_path, template_path,
-                               thresh_source, thresh_target):
+                               thresh_source, thresh_target, path, type):
     # Optical Flow
     of_object = OpticalFlow.OpticalFlow(source_path, target_path)
     of_object.calculate_optical_flow()
+    of_field = of_object.get_flow()
 
     # Template Matching
-    template_object = TemplateMatching.TemplateMatcher(source_path, translate_path, template_path,
+    template_object = TemplateMatching.TemplateMatcher(source_path, target_path, template_path,
                                                        thresh_source=thresh_source,
                                                        thresh_target=thresh_target)
     template_object.match_template_driver()
@@ -149,13 +162,21 @@ def test_optimization_function(source_path, target_path, template_path,
 
     field_filtered = moving_average_filter(optimized_displacement, window_size=8, threshold=0.8)
     field_averaged = average_filter(field_filtered, window_size=8)
-    vis.visualize_displacement(source_image, "Optimized Displacement", optimized_displacement)
-    vis.visualize_displacement(source_image, "Smoothed Optimized Displacement", field_averaged)
-    vis.visualize_displacement(source_image, "Initial Displacement", predicted)
-    vis.visualize_displacement_difference(optimized_displacement, predicted, source_image)
-    plt.show()
 
-    return field_averaged
+    smoothed_displace_path = os.path.join(set_path, f"Smoothed_Optimized_Field_{type}.png")
+    vis.visualize_displacement(source_image, "Smoothed Optimized Displacement", field_averaged,
+                               save_path=smoothed_displace_path)
+
+    initial_path = os.path.join(set_path, f"Optical_Field_{type}.png")
+    vis.visualize_displacement(source_image, "Initial Displacement", predicted,
+                               save_path=initial_path)
+
+    displacement_diff_path = os.path.join(set_path, f"Difference_Field_{type}.png")
+    vis.visualize_displacement_difference(optimized_displacement, predicted, source_image,
+                                          save_path=displacement_diff_path)
+    # plt.show()
+
+    return field_averaged, of_field
 
 
 def rmse(tensor_observed, tensor_truth):
@@ -169,10 +190,7 @@ def rmse(tensor_observed, tensor_truth):
 # ------------------------------- Experimental Code ---------------------------------------------
 experiment_path = "../2D_Experiment/Experiment"
 snr_values = [1, 2, 4, 8, 16]
-threshold_source = [0.8, 0.76, 0.8, 0.8, 0.8]
-threshold_trans = [0.73, 0.75, 0.8, 0.8, 0.8]
-threshold_rot = [0.8, 0.77, 0.8, 0.8, 0.8]
-set_range = 10
+set_range = 5
 
 index_snr = 0
 for value in snr_values:
@@ -187,26 +205,37 @@ for value in snr_values:
             template.run()
 
         # ----------------- Translational Image ------------------------------------
+        print("Translational Flow")
         translate_path = os.path.join(set_path, f"Translational_Flow_Image_Set_{i}.png")
-        trans_displace = test_optimization_function(source_path, translate_path, template_path,
-                                                    thresh_source=threshold_source[index_snr],
-                                                    thresh_target=threshold_trans[index_snr])
+        trans_displace, of_trans = test_optimization_function(source_path, translate_path, template_path,
+                                                              thresh_source=0.5,
+                                                              thresh_target=0.5,
+                                                              path=set_path,
+                                                              type="Translational")
         trans_truth_displace = os.path.join(set_path, f"Translated_Field_Set_{i}.npy")
         rmse_trans = rmse(trans_displace, torch.tensor(np.load(trans_truth_displace)))
+        rmse_of_trans = rmse(torch.tensor(of_trans), torch.tensor(np.load(trans_truth_displace)))
 
         # ------------------ Rotational Image ---------------------------------------
+        print("Rotational Flow")
         rotate_path = os.path.join(set_path, f"Rotational_Flow_Image_Set_{i}.png")
-        rotate_displace = test_optimization_function(source_path, rotate_path, template_path,
-                                                     thresh_source=threshold_source[index_snr],
-                                                     thresh_target=threshold_rot[index_snr])
+        rotate_displace, of_rotate = test_optimization_function(source_path, rotate_path, template_path,
+                                                                thresh_source=0.5,
+                                                                thresh_target=0.5,
+                                                                path=set_path,
+                                                                type = 'Rotational')
         rotate_truth_displace = os.path.join(set_path, f"Rotated_Field_Set_{i}.npy")
         rmse_rotate = rmse(rotate_displace, torch.tensor(np.load(rotate_truth_displace)))
+        rmse_of_rotate = rmse(torch.tensor(of_rotate), torch.tensor(np.load(rotate_truth_displace)))
 
         output_file_path = os.path.join(set_path, f"rmse_values_{i}.npy")
         rmse_values = {
             'rmse_translational': rmse_trans,
-            'rmse_rotational': rmse_rotate
+            'rmse_rotational': rmse_rotate,
+            'rmse_of_translational': rmse_of_trans,
+            'rmse_of_rotational': rmse_of_rotate
         }
+        print(rmse_values)
         np.save(output_file_path, rmse_values)
 
     index_snr = index_snr + 1

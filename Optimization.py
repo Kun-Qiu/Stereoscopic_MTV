@@ -44,8 +44,6 @@ def smoothness_constraint(u, v, lambda_smooth=100):
     dv_y = F.pad(dv_y, (0, 0, 0, 1), mode='constant', value=0)
 
     smoothness_loss = torch.mean((du_x + du_y) ** 2 + (dv_x + dv_y) ** 2)
-
-    # smoothness_loss = torch.sum((du_x + du_y) ** 2 + (dv_x + dv_y) ** 2)
     return lambda_smooth * smoothness_loss
 
 
@@ -69,8 +67,6 @@ def intensity_constraint(source_img, target_img, predicted_field):
 
     predicted_img_norm = predicted_image
     target_img_norm = target_img
-
-    # return torch.sum(torch.square(target_img_norm - predicted_img_norm))
     return torch.mean(torch.square(target_img_norm - predicted_img_norm))
 
 
@@ -100,8 +96,6 @@ def intensity_gradient_constraint(source_img, target_img, predicted_field, lambd
     div_target = I_target[0] + I_target[1]
 
     loss_intensity_grad = torch.mean((torch.abs(div_predicted - div_target)) ** 2)
-    # loss_intensity_grad = torch.sum((torch.abs(div_predicted - div_target)) ** 2)
-
     return lambda_intensity_grad * loss_intensity_grad
 
 
@@ -133,7 +127,6 @@ def known_displace_constraint(optical_flow, template_flow, lambda_vel=10.0):
         squared_error += (x_diff_squared + y_diff_squared)
 
     return lambda_vel * (torch.abs(squared_error) / len(template_flow))
-    # return lambda_vel * (torch.abs(squared_error))
 
 
 def optimize_displacement_field(model, source_img, target_img, observed_displacement,

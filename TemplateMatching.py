@@ -116,13 +116,17 @@ def average_filter(vectors, radius):
                 if distance < radius:
                     neighborhood.append([vectors[i][1], vectors[i][2]])
 
-        avg_vector = np.mean(np.array(neighborhood), axis=0)
-        smoothed_vectors.append((vectors[index][0], avg_vector[0], avg_vector[1]))
+        if len(neighborhood) != 0:
+            avg_vector = np.mean(np.array(neighborhood), axis=0)
+            smoothed_vectors.append((vectors[index][0], avg_vector[0], avg_vector[1]))
+        else:
+            smoothed_vectors.append(vectors[index])
+
     return smoothed_vectors
 
 
 def match_template(raw_img, img, template, polygon, use_CUDA=False, use_cython=False,
-                   threshold=None, nms_thresh=0.5):
+                   threshold=None, nms_thresh=0.2):
     """
     Using OpenCV template matching module, the template is being matched to the
     image to find location where the similarity is the strongest
@@ -134,7 +138,7 @@ def match_template(raw_img, img, template, polygon, use_CUDA=False, use_cython=F
     :param use_CUDA:        Use CUDA for computation (Speed up computation)
     :param use_cython:      Use Cython to compile C
     :param threshold:       Threshold for the normalized cross correlation
-    :param nms_thresh:      Threshold for the Non-Maximum Suppression
+    :param nms_thresh:      Threshold for percentage of overlap (Non-Maximum Suppression)
     :return:                List of (x, y) coordinates where similarity is above threshold value
     """
 
@@ -326,7 +330,7 @@ class TemplateMatcher:
                                                                   radius)
         self._displacement = average_filter(moving_average_validation_arr,
                                             radius)
-        self.visualize_match(self._source_points, self._target_points, self._displacement)
+        # self.visualize_match(self._source_points, self._target_points, self._displacement)
 
     def get_boundary(self):
         return self._polygon

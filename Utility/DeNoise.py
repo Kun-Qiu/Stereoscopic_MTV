@@ -2,12 +2,9 @@ import cv2
 import numpy as np
 
 
-def denoised_image(input_image_path, threshold=8):
-    # Read the image
-    original_image = cv2.imread(input_image_path, cv2.IMREAD_GRAYSCALE)
-
+def denoised_image(input_image, threshold=8):
     # Perform Fourier Transform
-    f_transform = np.fft.fft2(original_image)
+    f_transform = np.fft.fft2(input_image)
     f_shift = np.fft.fftshift(f_transform)
 
     # Calculate magnitude spectrum
