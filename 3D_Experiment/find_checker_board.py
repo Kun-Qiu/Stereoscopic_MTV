@@ -3,10 +3,16 @@ import re
 import cv2
 import non_linear_least_square as nsl
 import os
-import matplotlib.pyplot as plt
 
 
 def get_sorted_corner(corners):
+    """
+    Sort the corners for calibration --> To establish correspondance as both calibration
+    and distorted image must follow the sorting algorithm
+
+    :param corners:     The detected corners (list)
+    :return:            A sorted list of corners (list)
+    """
     sorted_x_corners = sorted(corners, key=lambda p: p[0])
     sorted_corners = []
 
@@ -27,6 +33,15 @@ def get_sorted_corner(corners):
 
 
 def manual_detection_corners(img, detected_corners, handle_mouse_bool=False):
+    """
+    The detection algorithm using Harris corner might not capture all the corners of the
+    checkerboard. Allow user to input and delete points.
+
+    :param img:                 Image of the checkerboard
+    :param detected_corners:    The detected corners using the Harris corner algorithm
+    :param handle_mouse_bool:   Whether user input is needed (True if yes else no)
+    :return:                    A new list of corners with the added/deleted corners
+    """
     img_copy = img.copy()
     for corner in detected_corners:
         x, y = np.intp(corner)
@@ -65,12 +80,18 @@ def manual_detection_corners(img, detected_corners, handle_mouse_bool=False):
 
 
 class CornerDetector:
-    def __init__(self, image_set_path, calibrate_shape=(10, 10)):
-        assert len(image_set_path) >= 1, "No path is given for the calibration images."
+    def __init__(self, image_set_path, num_square, calibrate_shape=(10, 10)):
+        self.__path = image_set_path
+        self.__num_square = num_square
+        image_filenames = []
+        for root, _, files in os.walk(directory):
+            for file in files:
+                if file.lower().endswith(('.png', '.jpg', '.jpeg', '.bmp', '.gif', '.tiff')):
+                    image_filenames.append(os.path.join(root, file))
 
         self.__left_image_set = []
         self.__right_image_set = []
-        for filename in image_set_path:
+        for filename in image_filenames:
             match = re.search(r'([-]?\d+)mm', filename)
             if match:
                 if 'left' in filename.lower():
@@ -81,9 +102,15 @@ class CornerDetector:
         self.__left_image_set = np.array(self.__left_image_set, dtype=object)
         self.__right_image_set = np.array(self.__right_image_set, dtype=object)
         self.__calibrate_shape = calibrate_shape
-        self.__optimized_param = None
 
     def __detect_corners(self, image_set_path):
+        """
+        Detect the corner to subpixel accuracy with the Harris Corner Detection algorithm provided
+        by OpenCV
+
+        :param image_set_path:      Path to the image
+        :return:                    A list of corners of the checkerboard
+        """
         assert isinstance(image_set_path, np.ndarray), "Incorrect array structure: requires Numpy array."
 
         all_img_corners = []
@@ -119,6 +146,16 @@ class CornerDetector:
         return all_img_corners, image_set_path[:, 1]
 
     def __object_plane_coordinates(self, num_grid, z_coords):
+        """
+        Create an object plane checkerboard --> Situation where image plane is parallel to object plane.
+        Used as the ground truth for calibration purposes.
+
+        :param num_grid:    Number of checkerboard squares
+        :param z_coords:    The z-coordinate that the plane is at
+        :return:            A list of object plane point (x, y, z)
+        """
+
+        num_grid += 1
         step_x, step_y = self.__calibrate_shape
 
         calibrate_coordinates = []
@@ -133,40 +170,35 @@ class CornerDetector:
         return calibrate_coordinates
 
     def run(self):
-        calibrated_point = self.__object_plane_coordinates(11, self.__left_image_set[:, 1])
+        """
+        Main driver for the execution of the checkerboard detection object
+
+        :return: Save the calibration coefficient of left and right camera to the same folder as
+                 as the calibration images.
+        """
+        calibrated_point = self.__object_plane_coordinates(self.__num_square, self.__left_image_set[:, 1])
         flattened_right, _ = self.__detect_corners(self.__right_image_set)
-        right_nsl_object = nsl.NonLinearLeastSquare(calibrated_points=calibrated_point,
-                                                    distorted_points=flattened_right)
-
-        right_param = right_nsl_object.calculate_least_square()
-
-        # fig, ax = plt.subplots()
-        #
-        # # Plot flattened_right
-        # ax.scatter(flattened_right[:121, 0], flattened_right[:121, 1], color='blue', label='Flattened Right')
-        #
-        # # Plot predicted points
-        # for pt in calibrated_point[:121]:
-        #     xpredicted, ypredicted = nsl.project_object_image(19, right_param, pt)
-        #     ax.scatter(xpredicted, ypredicted, color='red', label='Predicted')
-        #
-        # ax.set_xlabel('X Coordinate')
-        # ax.set_ylabel('Y Coordinate')
-        # ax.legend()
-        # plt.title('Comparison of Predicted and Flattened Right Points')
-        # plt.show()
-
         flattened_left, _ = self.__detect_corners(self.__left_image_set)
+
+        left_nsl_object = nsl.CalibrationTransformation(name_camera='left',
+                                                        calibrated_points=calibrated_point,
+                                                        distorted_points=flattened_left)
+        left_nsl_object.calibrate_least_square()
+
+        right_nsl_object = nsl.CalibrationTransformation(name_camera='right',
+                                                         calibrated_points=calibrated_point,
+                                                         distorted_points=flattened_right)
+        right_nsl_object.calibrate_least_square()
+        right_nsl_object.set_left_calibration(left_nsl_object)
+        right_nsl_object.save_calibration_coefficient(self.__path)
 
 
 # Example usage:
 if __name__ == "__main__":
+    """
+    Example execution of the class.
+    """
     directory = '../3D_Experiment/Calibration/'
-    image_filenames = []
-    for root, _, files in os.walk(directory):
-        for file in files:
-            if file.lower().endswith(('.png', '.jpg', '.jpeg', '.bmp', '.gif', '.tiff')):
-                image_filenames.append(os.path.join(root, file))
-
-    detector = CornerDetector(image_filenames, (40, 40))
+    num_grid = 10
+    detector = CornerDetector(directory, num_grid, (40, 40))
     detector.run()
