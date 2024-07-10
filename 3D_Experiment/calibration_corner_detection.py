@@ -117,12 +117,12 @@ def detect_corners(image_set_path):
 
 
 class CornerDetector:
-    def __init__(self, image_set_path, num_square, calibrate_shape=(10, 10)):
+    def __init__(self, image_set_path, num_square, shape=(40, 40), calibration=False):
         self.__path = image_set_path
         self.__num_square = num_square
 
         image_filenames = []
-        for root, _, files in os.walk(directory):
+        for root, _, files in os.walk(self.__path):
             for file in files:
                 if file.lower().endswith(('.png', '.jpg', '.jpeg', '.bmp', '.gif', '.tiff')):
                     image_filenames.append(os.path.join(root, file))
@@ -139,25 +139,33 @@ class CornerDetector:
 
         self.__left_image_set = np.array(self.__left_image_set, dtype=object)
         self.__right_image_set = np.array(self.__right_image_set, dtype=object)
-        self.__calibrate_shape = calibrate_shape
+        self.__calibrate_shape = shape
+        self.__calibrate_status = calibration
 
-    def __object_plane_coordinates(self, num_grid, z_coords):
+    def __object_plane_coordinates(self, num_grid, z_coords, dx=None, dy=None):
         """
         Create an object plane checkerboard --> Situation where image plane is parallel to object plane.
         Used as the ground truth for calibration purposes.
 
-        :param num_grid:    Number of checkerboard squares
-        :param z_coords:    The z-coordinate that the plane is at during calibration
-        :return:            A list of object plane point (x, y, z)
+        :param num_grid :       Number of checkerboard squares
+        :param z_coords :       The displacement in the z-direction (z_pos during calibration)
+        :param dx       :       The displacement in the x direction
+        :param dy       :       The displacement in the y direction
+        :return:                A list of object plane point (x, y, z)
         """
 
         num_grid += 1
         step_x, step_y = self.__calibrate_shape
 
+        if dx is None:
+            dx = np.zeros(len(z_coords))
+        if dy is None:
+            dy = np.zeros(len(z_coords))
+
         calibrate_coordinates = []
-        for z_coord in z_coords:
+        for i, z_coord in enumerate(z_coords):
             coordinates = [
-                [x, y, z_coord]
+                [x + dx[i], y + dy[i], z_coord]
                 for x in np.arange(0, num_grid * step_x, step_x)
                 for y in np.arange(0, num_grid * step_y, step_y)
             ]
@@ -165,16 +173,56 @@ class CornerDetector:
 
         return calibrate_coordinates
 
-    def run(self):
+    def get_right_corners(self):
+        """
+        Get the detected corner on the right image
+
+        :return:    Right corners
+        """
+        right_corners = detect_corners(self.__right_image_set[:, 0])
+        np.save(os.path.join(self.__path, "right_camera_pos.npy"), right_corners)
+        return right_corners
+
+    def get_left_corners(self):
+        """
+        Get the detected corner on the left image
+
+        :return:    Right corners
+        """
+
+        left_corners = detect_corners(self.__left_image_set[:, 0])
+        np.save(os.path.join(self.__path, "left_camera_pos.npy"), left_corners)
+        return left_corners
+
+    def get_initial_calibrate_corners(self, dx=None, dy=None):
+        """
+        Get the initial 3D coordinate for evaluation of algorithm
+
+        :param dx   :   The x displacement
+        :param dy   :   The y displacement
+        :return:        Actual 3D coordinates after the displacement
+        """
+
+        original_pts = self.__object_plane_coordinates(self.__num_square, self.__left_image_set[:, 1],
+                                                       dx, dy)
+        if dx == dy is None:
+            np.save(os.path.join(self.__path, "3D_camera_pos.npy"), original_pts)
+        else:
+            np.save(os.path.join(self.__path, "3D_true_camera_pos.npy"), original_pts)
+
+        return original_pts
+
+    def run_calibration(self):
         """
         Main driver for the execution of the checkerboard detection object
 
         :return: Save the calibration coefficient of left and right camera to the same folder
                  as the calibration images.
         """
+
         calibrated_point = self.__object_plane_coordinates(self.__num_square, self.__left_image_set[:, 1])
-        flattened_right = detect_corners(self.__right_image_set[:, 0])
         flattened_left = detect_corners(self.__left_image_set[:, 0])
+        flattened_right = detect_corners(self.__right_image_set[:, 0])
 
         np.save(os.path.join(self.__path, "calibrate_camera_pt.npy"), calibrated_point, allow_pickle=True)
         np.save(os.path.join(self.__path, "left_camera_pt.npy"), flattened_left, allow_pickle=True)
@@ -203,4 +251,4 @@ if __name__ == "__main__":
     directory = '../3D_Experiment/Calibration/'
     num_grid = 10
     detector = CornerDetector(directory, num_grid, (40, 40))
-    detector.run()
+    detector.run_calibration()
