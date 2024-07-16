@@ -14,12 +14,12 @@ def projection_object_to_image(params, point, num_params=19):
     :return:                The transformed point on the image plane
     """
     params = params.reshape(num_params, 2)
-    assert len(params) == 19, "Parameters must contain 19 coefficient vectors."
+    assert len(params) == num_params, "Parameters must contain 19 coefficient vectors."
 
     # Transformation Coefficient through Calibration
     coeff_x = params[:, 0]
     coeff_y = params[:, 1]
-    assert len(coeff_x) and len(coeff_y) == 19, "Coefficient must contain 19 values."
+    assert len(coeff_x) and len(coeff_y) == num_params, "Coefficient must contain 19 values."
 
     xi, yi, zi = point
 
@@ -64,10 +64,14 @@ def projection_object_to_image(params, point, num_params=19):
                    (coeff_y[17] * xi * (zi ** 2)) +
                    (coeff_y[18] * yi * (zi ** 2)))
 
+    if num_params == 20:
+        x_predicted += (coeff_x[19] * (zi ** 3))
+        y_predicted += (coeff_y[19] * (zi ** 3))
+
     return x_predicted, y_predicted
 
 
-def projection_error_display(calibrate_coeff, calibrated_pts, distorted_pts, points_per_plot=121):
+def projection_error_display(calibrate_coeff, calibrated_pts, distorted_pts, points_per_plot=121, num_param=19):
     num_points = len(calibrated_pts)
 
     fig = plt.figure(figsize=(8, 5))
@@ -81,7 +85,8 @@ def projection_error_display(calibrate_coeff, calibrated_pts, distorted_pts, poi
 
     all_errors = []
     for i in range(num_points):
-        u, v = projection_object_to_image(calibrate_coeff, calibrated_pts[i])
+        u, v = projection_object_to_image(calibrate_coeff, calibrated_pts[i],
+                                          num_params=num_param)
         predicted = np.array([u, v])
         error = np.sqrt(np.sum((distorted_pts[i] - predicted) ** 2))
         all_errors.append(error)
@@ -89,7 +94,8 @@ def projection_error_display(calibrate_coeff, calibrated_pts, distorted_pts, poi
     overall_max_error = np.max(all_errors) + np.std(all_errors)
 
     for i in range(num_points):
-        u, v = projection_object_to_image(calibrate_coeff, calibrated_pts[i])
+        u, v = projection_object_to_image(calibrate_coeff, calibrated_pts[i],
+                                          num_params=num_param)
         predicted = np.array([u, v])
         error = np.sqrt(np.sum((distorted_pts[i] - predicted) ** 2))
         z_coord = calibrated_pts[i, 2]
@@ -128,5 +134,5 @@ calibrate_pt = np.load(os.path.join(path, "Calibration/calibrate_camera_pt.npy")
 left_pt = np.array(np.load(os.path.join(path, "Calibration/left_camera_pt.npy"), allow_pickle=True))
 right_pt = np.array(np.load(os.path.join(path, "Calibration/right_camera_pt.npy"), allow_pickle=True))
 
-projection_error_display(left_coeff, calibrate_pt, left_pt)
-projection_error_display(right_coeff, calibrate_pt, right_pt)
+projection_error_display(left_coeff, calibrate_pt, left_pt, num_param=19)
+projection_error_display(right_coeff, calibrate_pt, right_pt, num_param=19)

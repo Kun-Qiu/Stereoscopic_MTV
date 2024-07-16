@@ -4,12 +4,15 @@ import os
 
 
 class CalibrationTransformation:
-    def __init__(self, calibrated_points, distorted_points, num_square=10):
+    def __init__(self, calibrated_points, distorted_points, num_square=10, i=3, j=3, k=2):
         assert len(calibrated_points) == len(distorted_points), "Length of calibration and distortion are not equal."
 
         self.__calibrated_points = calibrated_points
         self.__distorted_points = distorted_points
-        self.__NUM_PARAM = 19
+        if i == j == 3 and k == 2:
+            self.__NUM_PARAM = 19
+        if i == j == k == 3:
+            self.__NUM_PARAM = 20
         self.__NUM_SQUARE = num_square
         self.__calibrate_param = np.zeros((self.__NUM_PARAM, 2))
 
@@ -45,12 +48,12 @@ class CalibrationTransformation:
         :return:            Image plane points of the inputted object plane points
         """
         params = params.reshape(self.__NUM_PARAM, 2)
-        assert len(params) == 19, "Parameters must contain 19 coefficient vectors."
+        assert len(params) == self.__NUM_PARAM, "Parameters must contain 19 coefficient vectors."
 
         # Transformation Coefficient through Calibration
         coeff_x = params[:, 0]
         coeff_y = params[:, 1]
-        assert len(coeff_x) and len(coeff_y) == 19, "Coefficient must contain 19 values."
+        assert len(coeff_x) and len(coeff_y) == self.__NUM_PARAM, "Coefficient must contain 19 values."
 
         xi, yi, zi = point
 
@@ -93,6 +96,10 @@ class CalibrationTransformation:
                        (coeff_y[16] * (yi ** 2) * zi) +
                        (coeff_y[17] * xi * (zi ** 2)) +
                        (coeff_y[18] * yi * (zi ** 2)))
+
+        if self.__NUM_PARAM == 20:
+            x_predicted += (coeff_x[19] * (zi ** 3))
+            y_predicted += (coeff_y[19] * (zi ** 3))
 
         return x_predicted, y_predicted
 
