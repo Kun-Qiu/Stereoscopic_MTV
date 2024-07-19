@@ -240,11 +240,9 @@ class CornerDetector:
         np.save(os.path.join(self.__path, "right_camera_pt.npy"), flattened_right, allow_pickle=True)
 
         left_nsl_object = nsl.CalibrationTransformation(calibrated_points=calibrated_point,
-                                                        distorted_points=flattened_left,
-                                                        i=3, j=3, k=2)
+                                                        distorted_points=flattened_left)
         right_nsl_object = nsl.CalibrationTransformation(calibrated_points=calibrated_point,
-                                                         distorted_points=flattened_right,
-                                                         i=3, j=3, k=2)
+                                                         distorted_points=flattened_right)
 
         print("## Calculating transformation coefficient for left camera. ##")
         left_nsl_object.calibrate_least_square()
@@ -263,6 +261,6 @@ if __name__ == "__main__":
     Example execution of the class.
     """
     directory = '../3D_Experiment/Calibration/'
-    num_grid = 20
-    detector = CornerDetector(directory, num_grid, (20, 20))
+    num_grid = 10
+    detector = CornerDetector(directory, num_grid, (40, 40))
     detector.run_calibration()

@@ -64,10 +64,6 @@ def projection_object_to_image(params, point, num_params=19):
                    (coeff_y[17] * xi * (zi ** 2)) +
                    (coeff_y[18] * yi * (zi ** 2)))
 
-    if num_params == 20:
-        x_predicted += (coeff_x[19] * (zi ** 3))
-        y_predicted += (coeff_y[19] * (zi ** 3))
-
     return x_predicted, y_predicted
 
 
@@ -125,6 +121,8 @@ def projection_error_display(calibrate_coeff, calibrated_pts, distorted_pts, poi
     fig.tight_layout()
     plt.show()
 
+    return all_errors
+
 
 path = '../3D_Experiment/'
 left_coeff = np.load(os.path.join(path, "Calibration/left_cam_coeff.npy"))
@@ -134,5 +132,5 @@ calibrate_pt = np.load(os.path.join(path, "Calibration/calibrate_camera_pt.npy")
 left_pt = np.array(np.load(os.path.join(path, "Calibration/left_camera_pt.npy"), allow_pickle=True))
 right_pt = np.array(np.load(os.path.join(path, "Calibration/right_camera_pt.npy"), allow_pickle=True))
 
-projection_error_display(left_coeff, calibrate_pt, left_pt, num_param=19)
-projection_error_display(right_coeff, calibrate_pt, right_pt, num_param=19)
+left_error = projection_error_display(left_coeff, calibrate_pt, left_pt)
+right_error = projection_error_display(right_coeff, calibrate_pt, right_pt)

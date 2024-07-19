@@ -4,104 +4,59 @@ import os
 
 
 class CalibrationTransformation:
-    def __init__(self, calibrated_points, distorted_points, num_square=10, i=3, j=3, k=2):
+    def __init__(self, calibrated_points, distorted_points, num_square=10):
         assert len(calibrated_points) == len(distorted_points), "Length of calibration and distortion are not equal."
 
-        self.__calibrated_points = calibrated_points
-        self.__distorted_points = distorted_points
-        if i == j == 3 and k == 2:
-            self.__NUM_PARAM = 19
-        if i == j == k == 3:
-            self.__NUM_PARAM = 20
+        self.__calibrated_points = np.array(calibrated_points).astype(float)
+        self.__distorted_points = np.array(distorted_points).astype(float)
+        self.__NUM_PARAM = 19
         self.__NUM_SQUARE = num_square
         self.__calibrate_param = np.zeros((self.__NUM_PARAM, 2))
 
-    def __residuals(self, params):
+    def __calibration_residuals_dx(self, coeff):
         """
-        The residual term of the nonlinear least square --> Predicted - Truth
+        The residual term of the calibration procedure for projection onto the x coordinate of the
+        image plane --> Predicted - Truth
 
-        :param params:      The (19 x 2) parameter for the polynomial fitting
-        :return:            The residual --> Predicted - Truth
+        :param coeff    :   The (19 x 1) parameter for the polynomial fitting
+        :return         :   The residual --> Predicted - Truth
         """
-        x_predicted, y_predicted = [], []
-        for point in self.__calibrated_points:
-            x_img, y_img = self.__calibration_polynomial(point, params)
-            x_predicted.append(x_img)
-            y_predicted.append(y_img)
 
-        x_predicted = np.array(x_predicted)
-        y_predicted = np.array(y_predicted)
+        return self.__soloff_polynomial(self.__calibrated_points, coeff) - self.__distorted_points[:, 0]
 
-        x_true, y_true = zip(*self.__distorted_points)
-        x_true = np.array(x_true)
-        y_true = np.array(y_true)
+    def __calibration_residuals_dy(self, coeff):
+        """
+        The residual term of the calibration procedure for projection onto the y coordinate of the
+        image plane --> Predicted - Truth
 
-        return np.concatenate([x_predicted - x_true, y_predicted - y_true]).flatten()
+        :param coeff    :   The (19 x 1) parameter for the polynomial fitting
+        :return         :   The residual --> Predicted - Truth
+        """
+        return self.__soloff_polynomial(self.__calibrated_points, coeff) - self.__distorted_points[:, 1]
 
-    def __calibration_polynomial(self, point, params):
+    def __soloff_polynomial(self, XYZ, coeff):
         """
         Given the predicted coefficient, determine the transformation onto the image plane from an
         object plane
 
-        :param point:       Point located in the object plane
-        :param params:      Predicted coefficients used to project object plane onto image plane
-        :return:            Image plane points of the inputted object plane points
+        :param XYZ      :   Points located in the object plane (calibration points)
+        :param coeff    :   Predicted coefficients used to project object plane onto image plane
+        :return         :   Image plane points of the inputted object plane points
         """
-        params = params.reshape(self.__NUM_PARAM, 2)
-        assert len(params) == self.__NUM_PARAM, "Parameters must contain 19 coefficient vectors."
+        assert len(coeff) == self.__NUM_PARAM, "Parameters must contain 19 coefficients."
 
-        # Transformation Coefficient through Calibration
-        coeff_x = params[:, 0]
-        coeff_y = params[:, 1]
-        assert len(coeff_x) and len(coeff_y) == self.__NUM_PARAM, "Coefficient must contain 19 values."
+        xi, yi, zi = XYZ[:, 0], XYZ[:, 1], XYZ[:, 2]
 
-        xi, yi, zi = point
-
-        x_predicted = (coeff_x[0] +
-                       (coeff_x[1] * xi) +
-                       (coeff_x[2] * yi) +
-                       (coeff_x[3] * zi) +
-                       (coeff_x[4] * (xi ** 2)) +
-                       (coeff_x[5] * xi * yi) +
-                       (coeff_x[6] * (yi ** 2)) +
-                       (coeff_x[7] * (xi * zi)) +
-                       (coeff_x[8] * (yi * zi)) +
-                       (coeff_x[9] * (zi ** 2)) +
-                       (coeff_x[10] * (xi ** 3)) +
-                       (coeff_x[11] * (xi ** 2) * yi) +
-                       (coeff_x[12] * xi * (yi ** 2)) +
-                       (coeff_x[13] * (yi ** 3)) +
-                       (coeff_x[14] * (xi ** 2) * zi) +
-                       (coeff_x[15] * xi * yi * zi) +
-                       (coeff_x[16] * (yi ** 2) * zi) +
-                       (coeff_x[17] * xi * (zi ** 2)) +
-                       (coeff_x[18] * yi * (zi ** 2)))
-
-        y_predicted = (coeff_y[0] +
-                       (coeff_y[1] * xi) +
-                       (coeff_y[2] * yi) +
-                       (coeff_y[3] * zi) +
-                       (coeff_y[4] * (xi ** 2)) +
-                       (coeff_y[5] * xi * yi) +
-                       (coeff_y[6] * (yi ** 2)) +
-                       (coeff_y[7] * (xi * zi)) +
-                       (coeff_y[8] * (yi * zi)) +
-                       (coeff_y[9] * (zi ** 2)) +
-                       (coeff_y[10] * (xi ** 3)) +
-                       (coeff_y[11] * (xi ** 2) * yi) +
-                       (coeff_y[12] * xi * (yi ** 2)) +
-                       (coeff_y[13] * (yi ** 3)) +
-                       (coeff_y[14] * (xi ** 2) * zi) +
-                       (coeff_y[15] * xi * yi * zi) +
-                       (coeff_y[16] * (yi ** 2) * zi) +
-                       (coeff_y[17] * xi * (zi ** 2)) +
-                       (coeff_y[18] * yi * (zi ** 2)))
-
-        if self.__NUM_PARAM == 20:
-            x_predicted += (coeff_x[19] * (zi ** 3))
-            y_predicted += (coeff_y[19] * (zi ** 3))
-
-        return x_predicted, y_predicted
+        return (coeff[0] +
+                (coeff[1] * xi) + (coeff[2] * yi) + (coeff[3] * zi) +
+                (coeff[4] * (xi ** 2)) + (coeff[5] * xi * yi) +
+                (coeff[6] * (yi ** 2)) + (coeff[7] * (xi * zi)) +
+                (coeff[8] * (yi * zi)) + (coeff[9] * (zi ** 2)) +
+                (coeff[10] * (xi ** 3)) + (coeff[11] * (xi ** 2) * yi) +
+                (coeff[12] * xi * (yi ** 2)) + (coeff[13] * (yi ** 3)) +
+                (coeff[14] * (xi ** 2) * zi) + (coeff[15] * xi * yi * zi) +
+                (coeff[16] * (yi ** 2) * zi) + (coeff[17] * xi * (zi ** 2)) +
+                (coeff[18] * yi * (zi ** 2)))
 
     def calibrate_least_square(self):
         """
@@ -113,10 +68,11 @@ class CalibrationTransformation:
             raise ValueError(f"This function cannot be called if no input corners are given")
         else:
             params = np.zeros((self.__NUM_PARAM, 2))
-            result = least_squares(self.__residuals, params.flatten(), method='trf',
-                                   xtol=1.e-15, gtol=1.e-15, ftol=1.e-15, loss='cauchy')
-
-            self.__calibrate_param = result.x.reshape((self.__NUM_PARAM, 2))
+            s_x = least_squares(self.__calibration_residuals_dx, params[:, 0], method='trf',
+                                xtol=1.e-15, gtol=1.e-15, ftol=1.e-15, loss='cauchy').x
+            s_y = least_squares(self.__calibration_residuals_dy, params[:, 1], method='trf',
+                                xtol=1.e-15, gtol=1.e-15, ftol=1.e-15, loss='cauchy').x
+            self.__calibrate_param = np.column_stack((s_x, s_y))
 
     def get_camera_transform_function(self):
         """
