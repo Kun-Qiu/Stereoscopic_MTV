@@ -6,6 +6,7 @@ import numpy as np
 from scipy.optimize import least_squares
 
 from calibration_transform_coefficient import CalibrationPointDetector
+from calibration_transform_coefficient import detect_corners
 
 
 def displacement_function(XY_0, XY_t_l, XY_t_r, chunk_size):
@@ -39,6 +40,8 @@ class CalibrationDisplacementMatrix(CalibrationPointDetector):
         super().__init__(path, num_square, shape)
         self._num_points = pow((num_square + 1), 2)
         self._origin_path = np.array((None, None))
+        self._transformation_matrix = np.zeros((self._num_points, 4, 3))
+        self._object_pos = self._object_plane_param([0])
 
     def __object_plane_displace(self, dx, dy, dz):
         """
@@ -103,18 +106,18 @@ class CalibrationDisplacementMatrix(CalibrationPointDetector):
         self._left_image_set, self._right_image_set = self.__find_all_calibration_image()
 
         print("## Detecting Calibration Corners ##")
-        # flattened_origin = detect_corners(self._origin_path)
-        # flattened_left = detect_corners(self._left_image_set[:, 0])
-        # flattened_right = detect_corners(self._right_image_set[:, 0])
+        flattened_origin = detect_corners(self._origin_path).astype(float)
+        flattened_left = detect_corners(self._left_image_set[:, 0]).astype(float)
+        flattened_right = detect_corners(self._right_image_set[:, 0]).astype(float)
 
-        init = self._object_plane_param([0])[:, 0:2]
-        flattened_origin = np.load(os.path.join(self._path, "source_pt.npy"), allow_pickle=True).astype(float)
-        flattened_left = np.load(os.path.join(self._path, "left_camera_pt.npy"), allow_pickle=True).astype(float)
-        flattened_right = np.load(os.path.join(self._path, "right_camera_pt.npy"), allow_pickle=True).astype(float)
+        # flattened_origin = np.load(os.path.join(self._path, "source_pt.npy"), allow_pickle=True).astype(float)
+        # flattened_left = np.load(os.path.join(self._path, "left_camera_pt.npy"), allow_pickle=True).astype(float)
+        # flattened_right = np.load(os.path.join(self._path, "right_camera_pt.npy"), allow_pickle=True).astype(float)
 
         assert len(flattened_left) == len(flattened_right), \
             "Length of distortion images from either left or right camera are not equal."
 
+        np.save(os.path.join(self._path, "object_pt.npy"), self._object_pos, allow_pickle=True)
         # np.save(os.path.join(self._path, "source_pt.npy"), flattened_origin, allow_pickle=True)
         # np.save(os.path.join(self._path, "left_camera_pt.npy"), flattened_left, allow_pickle=True)
         # np.save(os.path.join(self._path, "right_camera_pt.npy"), flattened_right, allow_pickle=True)
@@ -145,29 +148,31 @@ class CalibrationDisplacementMatrix(CalibrationPointDetector):
 
             transformation_matrix += results
 
-        coeff_1 = transformation_matrix[:, 0, 0]
-        coeff_2 = transformation_matrix[:, 0, 1]
+        np.save(os.path.join(self._path, "transformation_matrix.npy"), transformation_matrix, allow_pickle=True)
 
-        # Extract the coordinates from init
-        coords_x = init[:, 0]
-        coords_y = init[:, 1]
+    def visualize_coefficients(self, coefficient_idx, show=False):
+        """
+        Visualize the transformation matrix for each coefficient on the x, y, z coordinate
 
-        # Plot the first coefficient
+        :param coefficient_idx  :   The index of the coefficient plotted
+        :param show             :   Whether to display plot
+        :return                 :   Visualize the plot of magnification coefficient
+        """
+        row, col = coefficient_idx
+        assert row < 4, f"Row {row} does not exist in the transformation matrix."
+        assert col < 3, f"Column {col} does not exist in the transformation matrix."
+
+        coeff = self._transformation_matrix[:, row, col]
+
         plt.figure(figsize=(10, 5))
-        plt.scatter(coords_x, coords_y, c=coeff_1, cmap='viridis', s=50, alpha=0.7)
+        plt.scatter(self._object_pos[:, 0], self._object_pos[:, 1], c=coeff, cmap='viridis', s=50, alpha=0.7)
         plt.colorbar(label='Coefficient 1')
         plt.title('First Coefficient of Transformation Matrix')
         plt.xlabel('X Coordinate')
         plt.ylabel('Y Coordinate')
 
-        # Plot the second coefficient
-        plt.figure(figsize=(10, 5))
-        plt.scatter(coords_x, coords_y, c=coeff_2, cmap='plasma', s=50, alpha=0.7)
-        plt.colorbar(label='Coefficient 2')
-        plt.title('Second Coefficient of Transformation Matrix')
-        plt.xlabel('X Coordinate')
-        plt.ylabel('Y Coordinate')
-        plt.show()
+        if show:
+            plt.show()
 
 
 # Example usage:
@@ -179,3 +184,4 @@ if __name__ == "__main__":
     directory_dis = '../3D_Experiment/Calibration/Displacement'
     detector_dis = CalibrationDisplacementMatrix(directory_dis, num_grid, (40, 40))
     detector_dis.run_calibration()
+    # detector_dis.visualize_coefficients((3, 1), True)

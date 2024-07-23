@@ -131,7 +131,7 @@ class CalibrationPointDetector:
     def __init__(self, path, num_square, shape=(40, 40)):
         self._path = path
         self._num_square = num_square
-        self._left_image_set, self._right_image_set = [], []
+        self._left_image_set, self._right_image_set = self._find_all_calibration_image()
         self._calibrate_shape = shape
 
     def _object_plane_param(self, z_coords, x_offset=0, y_offset=0, dx=None, dy=None):
@@ -182,7 +182,6 @@ class CalibrationPointDetector:
 
         :return :   Right corners
         """
-
         left_corners = detect_corners(self._left_image_set[:, 0])
         np.save(os.path.join(self._path, "left_camera_pos.npy"), left_corners)
         return left_corners
@@ -239,7 +238,6 @@ class CalibrationPointDetector:
                   as the calibration images.
         """
 
-        self._left_image_set, self._right_image_set = self._find_all_calibration_image()
         calibrated_point = np.array(self._object_plane_param(self._left_image_set[:, 1]))
 
         print("## Detecting Calibration Corners ##")
