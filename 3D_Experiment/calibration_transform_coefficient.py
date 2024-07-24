@@ -129,6 +129,10 @@ def detect_corners(image_set_path):
 
 class CalibrationPointDetector:
     def __init__(self, path, num_square, shape=(40, 40)):
+        assert os.path.exists(path), f"Given path: {path}, does not exist."
+        assert num_square > 0, "Number of squares must be positive, non-zero integers."
+        assert all(dim > 0 for dim in shape), "Dimensions of squares must be positive, non-zero integers."
+
         self._path = path
         self._num_square = num_square
         self._left_image_set, self._right_image_set = self._find_all_calibration_image()
@@ -274,6 +278,6 @@ if __name__ == "__main__":
     Example execution of the class.
     """
     num_grid = 10
-    directory = '../3D_Experiment/Calibration/Coordinates'
+    directory = '../3D_Experiment/Calibration/'
     detector = CalibrationPointDetector(directory, num_grid, (40, 40))
     detector.run_calibration()

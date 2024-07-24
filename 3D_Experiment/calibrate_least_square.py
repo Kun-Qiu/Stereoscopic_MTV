@@ -7,6 +7,7 @@ from scipy.optimize import least_squares
 class CalibrationTransformation:
     def __init__(self, calibrated_points, distorted_points, num_square=10):
         assert len(calibrated_points) == len(distorted_points), "Length of calibration and distortion are not equal."
+        assert num_square > 0, "Number of squares must be positive, non-zero integers."
 
         self.__calibrated_points = np.array(calibrated_points).astype(float)
         self.__distorted_points = np.array(distorted_points).astype(float)
@@ -69,7 +70,7 @@ class CalibrationTransformation:
         if self.__calibrated_points is None or self.__distorted_points is None:
             raise ValueError(f"This function cannot be called if no input corners are given")
         else:
-            params = np.zeros((10, 2))
+            params = np.zeros((self.__NUM_PARAM, 2))
             s_x = least_squares(self.__calibration_residuals_dx, params[:, 0], method='trf',
                                 xtol=1.e-15, gtol=1.e-15, ftol=1.e-15, loss='cauchy').x
             s_y = least_squares(self.__calibration_residuals_dy, params[:, 1], method='trf',
