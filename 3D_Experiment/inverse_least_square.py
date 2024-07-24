@@ -74,9 +74,9 @@ class InverseTransform:
         coefficient.
         ***
 
-        :param left_img_pts:        Image plane point from the left camera
-        :param right_img_pts:       Image plane point from the right camera
-        :return:                    Optimized (x, y, z)
+        :param left_img_pts     :   Image plane point from the left camera
+        :param right_img_pts    :   Image plane point from the right camera
+        :return                 :   Optimized (x, y, z)
         """
         object_pt_predicted = np.array(((left_img_pts[0] + right_img_pts[0]) / 2,
                                         (left_img_pts[1] + right_img_pts[1]) / 2,
@@ -143,9 +143,9 @@ class InverseTransform:
         Obtain the augmented matrix for the transformation from object plane displacement to
         image plane displacements
 
-        :param XYZ      :   Desired object plane position at (xi, yi, zi)
-        :param a        :   The transformation coefficient from Soloff polynomial
-        :return         :   The augmented displacement transformation matrix at the point
+        :param XYZ  :   Desired object plane position at (xi, yi, zi)
+        :param a    :   The transformation coefficient from Soloff polynomial
+        :return     :   The augmented displacement transformation matrix at the point
         """
         assert a.shape == (self.__NUM_PARAM, 2), f"Shape of coefficient must be {(self.__NUM_PARAM, 2)}. The input" \
                                                  f"coefficient have a shape of {a.shape}."
@@ -162,7 +162,7 @@ class InverseTransform:
 
         return F11, F12, F13, F21, F22, F23
 
-    def __inverse_displacement_transform(self, dxyz, xyz, dXY_l, dXY_r):
+    def __inverse_displacement_transform_residual(self, dxyz, xyz, dXY_l, dXY_r):
         """
         Compute the residual between the predicted object plane displacement and the
         image plane displacements.
@@ -211,7 +211,7 @@ class InverseTransform:
                              (dXY_l[1] + dXY_r[1]) / 2,
                              0), dtype=np.float64)
 
-        result = least_squares(self.__inverse_displacement_transform, x0=dxyz_hat, method='trf',
+        result = least_squares(self.__inverse_displacement_transform_residual, x0=dxyz_hat, method='trf',
                                xtol=1.e-15, gtol=1.e-15, ftol=1.e-15, loss='cauchy',
                                args=(xyz, dXY_l, dXY_r))
 

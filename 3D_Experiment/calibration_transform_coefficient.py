@@ -266,6 +266,8 @@ class CalibrationPointDetector:
         left_nsl_object.save_calibration_coefficient(self._path, "left_cam_coeff")
         right_nsl_object.save_calibration_coefficient(self._path, "right_cam_coeff")
 
+        print("## Completed the calculation of transformation coefficients ##")
+
 
 if __name__ == "__main__":
     """

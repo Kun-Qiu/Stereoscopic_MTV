@@ -61,9 +61,10 @@ class CalibrationTransformation:
 
     def calibrate_least_square(self):
         """
-        Apply the nonlinear least square using algorithm provided by SciPy Optimization Library
+        Apply the nonlinear least square to determine the transformation coefficients
+        for the Soloff Polynomial.
 
-        :return: The optimized solution of the coefficient that minimize the residual
+        :return : The optimized solution of the coefficient that minimize the residual
         """
         if self.__calibrated_points is None or self.__distorted_points is None:
             raise ValueError(f"This function cannot be called if no input corners are given")
@@ -77,14 +78,17 @@ class CalibrationTransformation:
 
     def get_camera_transform_function(self):
         """
-        :return: Camera transformation coefficients
+        Returns the transformation coefficient
+
+        :return : Camera transformation coefficients
         """
         return self.__calibrate_param
 
     def clear_calibration_param(self):
         """
         Clears the camera transformation coefficients
-        :return: None
+
+        :return : None
         """
         self.__calibrate_param = np.array((self.__NUM_PARAM, 2))
 
@@ -92,8 +96,8 @@ class CalibrationTransformation:
         """
         Set the object's transformation to a user defined coefficient
 
-        :param coeffs:  User defined coefficient
-        :return:        None
+        :param coeffs   :   User defined coefficient
+        :return         :   None
         """
         assert coeffs.shape == (self.__NUM_PARAM, 2), \
             f"Input parameter does not have the shape of ({self.__NUM_PARAM}, 2)."
@@ -103,9 +107,9 @@ class CalibrationTransformation:
         """
         Save the transformation coefficient to a desired path
 
-        :param path:    Path of the destination
-        :param name:    Name of the file
-        :return:        None
+        :param path :   Path of the destination
+        :param name :   Name of the file
+        :return     :   Save the calibration coefficient to path
         """
         assert not np.all(self.__calibrate_param == 0), "Camera calibration coefficients cannot be all zeros."
 
