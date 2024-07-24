@@ -1,6 +1,7 @@
+import os
+
 import numpy as np
 from scipy.optimize import least_squares
-import os
 
 
 class CalibrationTransformation:
@@ -67,7 +68,7 @@ class CalibrationTransformation:
         if self.__calibrated_points is None or self.__distorted_points is None:
             raise ValueError(f"This function cannot be called if no input corners are given")
         else:
-            params = np.zeros((self.__NUM_PARAM, 2))
+            params = np.zeros((10, 2))
             s_x = least_squares(self.__calibration_residuals_dx, params[:, 0], method='trf',
                                 xtol=1.e-15, gtol=1.e-15, ftol=1.e-15, loss='cauchy').x
             s_y = least_squares(self.__calibration_residuals_dy, params[:, 1], method='trf',

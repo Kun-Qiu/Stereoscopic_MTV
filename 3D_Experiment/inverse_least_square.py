@@ -65,6 +65,29 @@ class InverseTransform:
 
         return [eq1 - img_pt_left[0], eq2 - img_pt_left[1], eq3 - img_pt_right[0], eq4 - img_pt_right[1]]
 
+    def inverse_point_least_square(self, left_img_pts, right_img_pts):
+        """
+        Apply the nonlinear least square using algorithm provided by SciPy Optimization Library
+
+        ***
+        Transform image plane coordinates in the object plane coordinate using the calibration
+        coefficient.
+        ***
+
+        :param left_img_pts:        Image plane point from the left camera
+        :param right_img_pts:       Image plane point from the right camera
+        :return:                    Optimized (x, y, z)
+        """
+        object_pt_predicted = np.array(((left_img_pts[0] + right_img_pts[0]) / 2,
+                                        (left_img_pts[1] + right_img_pts[1]) / 2,
+                                        0), dtype=np.float64)
+
+        result = least_squares(self.__inverse_polynomial_transform_point, x0=object_pt_predicted, method='trf',
+                               xtol=1.e-15, gtol=1.e-15, ftol=1.e-15, loss='cauchy',
+                               args=(left_img_pts, right_img_pts))
+
+        return result.x
+
     def __dFdx(self, XYZ, a):
         """
         Derivative of the Soloff polynomial in the x-direction
@@ -129,7 +152,6 @@ class InverseTransform:
 
         coeff_x, coeff_y = a[:, 0], a[:, 1]
 
-        # Left camera augmented matrix
         F11 = self.__dFdx(XYZ, coeff_x)
         F12 = self.__dFdy(XYZ, coeff_x)
         F13 = self.__dFdz(XYZ, coeff_x)
@@ -147,6 +169,7 @@ class InverseTransform:
 
         :param dxyz     :   Predicted object plane displacement at point xyz (shape=(3,1))
         :param xyz      :   The point where displacement is desired (xi, yi, zi)
+        :param F        :   Transformation matrix for the project of image displacement to object (shape=(4x3))
         :param dXY_l    :   Displacement of the point xyz in the left camera (shape=(2,1))
         :param dXY_r    :   Displacement of the point xyz in the right camera (shape=(2,1))
         :return         :   The residual
@@ -158,42 +181,15 @@ class InverseTransform:
         assert dXY_l.shape == dXY_r.shape == (2,), f"The shape of the camera displacements should be (3, 1). " \
                                                    f"Shape of left cam: {dXY_l.shape} and right cam: {dXY_r.shape}."
 
-        dx, dy, dz = dxyz
-
         F11_1, F12_1, F13_1, F21_1, F22_1, F23_1 = self.__inverse_augmented_matrix(xyz, self.__left_calibrate_coeff)
         F11_2, F12_2, F13_2, F21_2, F22_2, F23_2 = self.__inverse_augmented_matrix(xyz, self.__right_calibrate_coeff)
 
-        dX_l = F11_1 * dx + F12_1 * dy + F13_1 * dz
-        dY_l = F21_1 * dx + F22_1 * dy + F23_1 * dz
+        F = np.array(([F11_1, F12_1, F13_1], [F21_1, F22_1, F23_1],
+                      [F11_2, F12_2, F13_2], [F21_2, F22_2, F23_2]))
 
-        dX_r = F11_2 * dx + F12_2 * dy + F13_2 * dz
-        dY_r = F21_2 * dx + F22_2 * dy + F23_2 * dz
-
-        return [dXY_l[0] - dX_l, dXY_l[1] - dY_l,
-                dXY_r[0] - dX_r, dXY_r[1] - dY_r]
-
-    def inverse_point_least_square(self, left_img_pts, right_img_pts):
-        """
-        Apply the nonlinear least square using algorithm provided by SciPy Optimization Library
-
-        ***
-        Transform image plane coordinates in the object plane coordinate using the calibration
-        coefficient.
-        ***
-
-        :param left_img_pts:        Image plane point from the left camera
-        :param right_img_pts:       Image plane point from the right camera
-        :return:                    Optimized (x, y, z)
-        """
-        object_pt_predicted = np.array(((left_img_pts[0] + right_img_pts[0]) / 2,
-                                        (left_img_pts[1] + right_img_pts[1]) / 2,
-                                        0), dtype=np.float64)
-
-        result = least_squares(self.__inverse_polynomial_transform_point, x0=object_pt_predicted, method='trf',
-                               xtol=1.e-15, gtol=1.e-15, ftol=1.e-15, loss='cauchy',
-                               args=(left_img_pts, right_img_pts))
-
-        return result.x
+        dXY = np.dot(F, dxyz)
+        return [dXY_l[0] - dXY[0], dXY_l[1] - dXY[1],
+                dXY_r[0] - dXY[2], dXY_r[1] - dXY[3]]
 
     def inverse_displacement(self, xyz, dXY_l, dXY_r):
         """
@@ -205,10 +201,12 @@ class InverseTransform:
         ***
 
         :param xyz      :   The point in which the displacement is desired
+        :param F        :   Transformation matrix for the project of image displacement to object
         :param dXY_l    :   Image plane displacement from the left camera
         :param dXY_r    :   Image plane displacement from the right camera
         :return         :   Optimized (dx, dy, dz) at a specific interest point
         """
+
         dxyz_hat = np.array(((dXY_l[0] + dXY_r[0]) / 2,
                              (dXY_l[1] + dXY_r[1]) / 2,
                              0), dtype=np.float64)
