@@ -1,79 +1,107 @@
-import numpy as np
 import matplotlib.pyplot as plt
+import numpy as np
 from scipy.interpolate import griddata
 
 
+def plot_interpolation(XY, dXYZ, unit_label):
+    """
+    Plot the given dXYZ array whether it is 1D, 2D, 3D with the associated
+    common colorbar.
+
+    :param XY               :   The input coordinates
+    :param dXYZ             :   The array that needed to be plotted
+    :param unit_label       :   Label for the color bar (unit)
+    :return                 :   Plot of the desired dXYZ with common colorbar
+    """
+
+    XY, dXYZ = np.array(XY), np.array(dXYZ)
+
+    fig, axes = plt.subplots(nrows=dXYZ.shape[2], ncols=1, figsize=(8, 6))
+
+    vmin = np.min(dXYZ)
+    vmax = np.max(dXYZ)
+
+    for i, ax in enumerate(axes):
+        im = ax.pcolormesh(XY[:, :, 0], XY[:, :, 1], dXYZ[:, :, i], vmin=vmin, vmax=vmax, shading='auto')
+        ax.set_title(f'Component {i}')
+
+    fig.subplots_adjust(hspace=0.5)
+    cbar = fig.colorbar(im, ax=axes.ravel().tolist(), location='right')
+    cbar.set_label(f'{unit_label}', fontsize=11)
+    fig.supylabel("Y Coordinate [mm]")
+    fig.supxlabel("X Coordinate [mm]")
+    plt.show()
+
+
 class DisplacementInterpolator:
-    def __init__(self, points, displacement, grid_density=100, method='cubic', kx=3, ky=3, s=0):
-        self.__points = np.array(points)
-        self.__displacement = np.array(displacement)
+    def __init__(self, XY, dXY, grid_density=100, method='cubic', kx=3, ky=3, s=0):
+        assert grid_density >= 1, "Desired grid density is smaller than original density."
+        assert method.lower() == "linear" or "cubic" or "nearest"
+
+        self.__points = np.array(XY)
+        self.__displacement = np.array(dXY)
         self.__density = grid_density
         self.__kx = kx
         self.__ky = ky
         self.__s = s
         self.__method = method
+
         self.__interpolate_displacement = None
         self.__interpolate_grid = None
-        # self.norm = np.sqrt(np.sum(self.__displacement**2, axis=1))
+        self.compute_interpolate_grid()
 
-        assert grid_density >= 1, "Desired grid density is smaller than original density."
-        assert method.lower() == "linear" or "cubic" or "nearest"
+    def compute_interpolate_point(self, XY):
+        """
+        Obtain the interpolated value for the point (xi, yi) given some known value
+        of surrounding points.
 
-    def interpolate(self):
-        x_new = np.linspace(np.min(self.__points[:, 0]), np.max(self.__points[:, 0]), self.__density)
-        y_new = np.linspace(np.min(self.__points[:, 1]), np.max(self.__points[:, 1]), self.__density)
+        :param XY   :   The point whose dXY is needed
+        :return     :   The displacement at that point is returned
+        """
+        point = np.array(XY)
+        assert point.shape == (2,), "Single point must be a 2D coordinate."
+
+        interpolated_x = griddata(self.__points, self.__displacement[:, 0], point, method=self.__method)
+        interpolated_y = griddata(self.__points, self.__displacement[:, 1], point, method=self.__method)
+
+        return np.array([interpolated_x, interpolated_y])
+
+    def compute_interpolate_grid(self):
+        """
+        Interpolate the entire displacement grid given the grid density and several known
+        displacements.
+
+        :return :   Interpolated map of the desired value
+        """
+        x_min, y_min = np.min(self.__points, axis=0)
+        x_max, y_max = np.max(self.__points, axis=0)
+        x_new = np.linspace(x_min, x_max, self.__density)
+        y_new = np.linspace(y_min, y_max, self.__density)
+
         X_new, Y_new = np.meshgrid(x_new, y_new)
+        interpolate_vector = griddata(self.__points, self.__displacement,
+                                      (X_new, Y_new), method=self.__method)
 
-        interpolate_x_vector = griddata(self.__points, self.__displacement[:, 0],
-                                        (X_new, Y_new),
-                                        method=self.__method)
+        self.__interpolate_displacement = interpolate_vector
+        self.__interpolate_grid = np.dstack((X_new, Y_new))
 
-        interpolate_y_vector = griddata(self.__points, self.__displacement[:, 1],
-                                        (X_new, Y_new),
-                                        method=self.__method)
+    def plot_interpolation(self, unit_label):
+        """
+        Plot the interpolation of the displacement using color plot
 
-        self.__interpolate_displacement = (interpolate_x_vector, interpolate_y_vector)
-        self.__interpolate_grid = (X_new, Y_new)
-
-    def plot_interpolation(self, display_vector=False):
-        if self.__interpolate_displacement is None:
-            self.interpolate()
-
-        x, y = self.__interpolate_grid
-        x_hat, y_hat = self.__interpolate_displacement
-
-        # Calculate magnitudes of unit vectors
-        norm = np.sqrt(x_hat ** 2 + y_hat ** 2)
-        unit_x = x_hat / norm
-        unit_y = y_hat / norm
-
-        plt.figure(figsize=(12, 6))
-
-        # Plot scattered data with colored quiver plot
-        plt.subplot(121)
-        plt.scatter(self.__points[:, 0], self.__points[:, 1],
-                    c=np.sqrt(np.sum(self.__displacement ** 2, axis=1)), cmap='viridis')
-        plt.title('Scattered Data')
-
-        plt.subplot(122)
-        # if display_vector:
-        #     plt.quiver(x[::step, ::step], y[::step, ::step],
-        #                unit_x[::step, ::step], unit_y[::step, ::step], cmap='viridis', scale=50)
-        plt.imshow(norm, extent=(np.min(x), np.max(x), np.min(y), np.max(y)), origin='lower', cmap='viridis',
-                   aspect='auto')
-        plt.colorbar(label='Magnitude')
-        plt.title('Interpolated Grid')
-        plt.tight_layout()
-        plt.show()
+        :param unit_label   :   Label for the color plot
+        :return             :   None --> Plot
+        """
+        plot_interpolation(self.__interpolate_grid, self.__interpolate_displacement,
+                           unit_label=unit_label)
 
     def get_interpolate(self):
-        if self.__interpolate_displacement is None:
-            self.interpolate()
+        """
+        Get the interpolated values for the coordinate and the displacement
 
-        x, y = self.__interpolate_grid
-        x_hat, y_hat = self.__interpolate_displacement
-
-        return x, y, x_hat, y_hat
+        :return :   Interpolated grid and the associated displacement
+        """
+        return self.__interpolate_grid, self.__interpolate_displacement
 
 
 # Example usage
@@ -102,9 +130,5 @@ if __name__ == "__main__":
 
     points = np.column_stack((x_coords, y_coords))
     displacement = np.column_stack((x_displacement, y_displacement))
-
-    # Create an instance of DisplacementInterpolator
-    interpolator = DisplacementInterpolator(points, displacement, grid_density=50)
-
-    # Plot the interpolation
-    interpolator.plot_interpolation()
+    interpolator = DisplacementInterpolator(points, displacement, grid_density=500)
+    point = interpolator.compute_interpolate_point(np.array((400, 400)))
