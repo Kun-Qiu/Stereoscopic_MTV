@@ -3,7 +3,7 @@ import os
 import numpy as np
 
 import inverse_least_square as ils
-from interpolate import DisplacementInterpolator
+from interpolator import DisplacementInterpolator
 
 
 def read_numpy_file(input_var):
@@ -21,7 +21,7 @@ def read_numpy_file(input_var):
 
 
 class Velocity2D_3C:
-    def __init__(self, XY_l, XY_r, dXY_l, dXY_r, path_coeff_l, path_coeff_r, grid_density=500, window_size=10):
+    def __init__(self, XY_l, XY_r, dXY_l, dXY_r, path_coeff_l, path_coeff_r, grid_density=500, window_size=44):
         self._XY_l = read_numpy_file(XY_l)
         self._XY_r = read_numpy_file(XY_r)
         self._dXY_l = read_numpy_file(dXY_l)
@@ -108,7 +108,7 @@ class Velocity2D_3C:
 
         return dXY_2D
 
-    def interpolate_3D_displacement(self, XY, dXYZ, display=True):
+    def interpolate_3D_displacement(self, XY, dXYZ, display=False):
         """
         Interpolate the 3D displacement at several known point to a desired grid
 

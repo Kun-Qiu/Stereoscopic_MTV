@@ -1,36 +1,7 @@
-import matplotlib.pyplot as plt
 import numpy as np
 from scipy.interpolate import griddata
 
-
-def plot_interpolation(XY, dXYZ, unit_label):
-    """
-    Plot the given dXYZ array whether it is 1D, 2D, 3D with the associated
-    common colorbar.
-
-    :param XY               :   The input coordinates
-    :param dXYZ             :   The array that needed to be plotted
-    :param unit_label       :   Label for the color bar (unit)
-    :return                 :   Plot of the desired dXYZ with common colorbar
-    """
-
-    XY, dXYZ = np.array(XY), np.array(dXYZ)
-
-    fig, axes = plt.subplots(nrows=dXYZ.shape[2], ncols=1, figsize=(8, 6))
-
-    vmin = np.min(dXYZ)
-    vmax = np.max(dXYZ)
-
-    for i, ax in enumerate(axes):
-        im = ax.pcolormesh(XY[:, :, 0], XY[:, :, 1], dXYZ[:, :, i], vmin=vmin, vmax=vmax, shading='auto')
-        ax.set_title(f'Component {i}')
-
-    fig.subplots_adjust(hspace=0.5)
-    cbar = fig.colorbar(im, ax=axes.ravel().tolist(), location='right')
-    cbar.set_label(f'{unit_label}', fontsize=11)
-    fig.supylabel("Y Coordinate [mm]")
-    fig.supxlabel("X Coordinate [mm]")
-    plt.show()
+from Utility.Visualization import plot_interpolation
 
 
 class DisplacementInterpolator:
@@ -85,15 +56,16 @@ class DisplacementInterpolator:
         self.__interpolate_displacement = interpolate_vector
         self.__interpolate_grid = np.dstack((X_new, Y_new))
 
-    def plot_interpolation(self, unit_label):
+    def plot_interpolation(self, unit_label, contour=False):
         """
         Plot the interpolation of the displacement using color plot
 
         :param unit_label   :   Label for the color plot
+        :param contour      :   Boolean on whether contour lines should be plotted
         :return             :   None --> Plot
         """
         plot_interpolation(self.__interpolate_grid, self.__interpolate_displacement,
-                           unit_label=unit_label)
+                           unit_label=unit_label, contour=contour)
 
     def get_interpolate(self):
         """

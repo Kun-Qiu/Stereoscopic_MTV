@@ -226,12 +226,12 @@ class CalibrationPointDetector:
         left_image_set, right_image_set = [], []
         for filename in image_filenames:
             reduced_filename = os.path.basename(filename.replace('\\', '/'))
-            match = re.search(r'(-?\d+)mm', reduced_filename)
+            match = re.search(r'(-?\d+(?:\.\d+)?)mm', reduced_filename)
             if match:
                 if 'left' in filename.lower():
-                    left_image_set.append([filename, int(match.group(1))])
+                    left_image_set.append([filename, float(match.group(1))])
                 elif 'right' in filename.lower():
-                    right_image_set.append([filename, int(match.group(1))])
+                    right_image_set.append([filename, float(match.group(1))])
         return np.array(left_image_set, dtype=object), np.array(right_image_set, dtype=object)
 
     def run_calibration(self):
@@ -278,6 +278,6 @@ if __name__ == "__main__":
     Example execution of the class.
     """
     num_grid = 10
-    directory = '../3D_Experiment/Calibration/'
+    directory = '../3D_Experiment/Calibration/Set_4'
     detector = CalibrationPointDetector(directory, num_grid, (40, 40))
     detector.run_calibration()
