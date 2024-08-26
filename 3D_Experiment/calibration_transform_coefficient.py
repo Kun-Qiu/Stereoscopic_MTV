@@ -128,14 +128,19 @@ def detect_corners(image_set_path):
 
 
 class CalibrationPointDetector:
-    def __init__(self, path, num_square, shape=(40, 40)):
-        assert os.path.exists(path), f"Given path: {path}, does not exist."
+    def __init__(self, path_left, path_right, save_path, num_square, shape=(40, 40)):
+        assert os.path.exists(path_left), f"Given path: {path_left}, does not exist."
+        assert os.path.exists(path_right), f"Given path: {path_right}, does not exist."
+        assert os.path.exists(save_path), f"Given path: {save_path}, does not exist."
         assert num_square > 0, "Number of squares must be positive, non-zero integers."
         assert all(dim > 0 for dim in shape), "Dimensions of squares must be positive, non-zero integers."
 
-        self._path = path
+        self._path_left = path_left
+        self._path_right = path_right
+        self._save_path = save_path
         self._num_square = num_square
-        self._left_image_set, self._right_image_set = self._find_all_calibration_image()
+        self._left_image_set = self._find_all_calibration_image(self._path_left)
+        self._right_image_set = self._find_all_calibration_image(self._path_right)
         self._calibrate_shape = shape
 
     def _object_plane_param(self, z_coords, x_offset=0, y_offset=0, dx=None, dy=None):
@@ -177,7 +182,7 @@ class CalibrationPointDetector:
         :return :   Right corners
         """
         right_corners = detect_corners(self._right_image_set[:, 0])
-        np.save(os.path.join(self._path, "right_camera_pos.npy"), right_corners)
+        np.save(os.path.join(self._save_path, "right_camera_pos.npy"), right_corners)
         return right_corners
 
     def get_left_param(self):
@@ -187,7 +192,7 @@ class CalibrationPointDetector:
         :return :   Right corners
         """
         left_corners = detect_corners(self._left_image_set[:, 0])
-        np.save(os.path.join(self._path, "left_camera_pos.npy"), left_corners)
+        np.save(os.path.join(self._save_path, "left_camera_pos.npy"), left_corners)
         return left_corners
 
     def get_initial_calibrate_corners(self, x_offset=0, y_offset=0, dx=None, dy=None):
@@ -204,35 +209,33 @@ class CalibrationPointDetector:
         original_pts = self._object_plane_param(self._left_image_set[:, 1],
                                                 x_offset, y_offset, dx, dy)
         if dx == dy is None:
-            np.save(os.path.join(self._path, "3D_camera_pos.npy"), original_pts)
+            np.save(os.path.join(self._save_path, "3D_camera_pos.npy"), original_pts)
         else:
-            np.save(os.path.join(self._path, "3D_true_camera_pos.npy"), original_pts)
+            np.save(os.path.join(self._save_path, "3D_true_camera_pos.npy"), original_pts)
 
         return original_pts
 
-    def _find_all_calibration_image(self):
+    def _find_all_calibration_image(self, path):
         """
         Find all the calibration images within a folder and extract the depth information from the name.
         Purpose: Used to find Soloff polynomial to map 3D coordinates to 2D coordinates in image plane.
 
+        :param path :   Path of the calibration image path
         :return     :   Two set of calibration images path (Left and right camera)
         """
         image_filenames = []
-        for root, _, files in os.walk(self._path):
+        for root, _, files in os.walk(path):
             for file in files:
                 if file.lower().endswith(('.png', '.jpg', '.jpeg', '.bmp', '.gif', '.tiff')):
                     image_filenames.append(os.path.join(root, file))
 
-        left_image_set, right_image_set = [], []
+        image_set = []
         for filename in image_filenames:
             reduced_filename = os.path.basename(filename.replace('\\', '/'))
             match = re.search(r'(-?\d+(?:\.\d+)?)mm', reduced_filename)
             if match:
-                if 'left' in filename.lower():
-                    left_image_set.append([filename, float(match.group(1))])
-                elif 'right' in filename.lower():
-                    right_image_set.append([filename, float(match.group(1))])
-        return np.array(left_image_set, dtype=object), np.array(right_image_set, dtype=object)
+                image_set.append([filename, float(match.group(1))])
+        return np.array(image_set, dtype=object)
 
     def run_calibration(self):
         """
@@ -251,9 +254,9 @@ class CalibrationPointDetector:
         assert len(calibrated_point) == len(flattened_left) == len(flattened_right), \
             "Length of calibration and distortion from either left or right camera are not equal."
 
-        np.save(os.path.join(self._path, "calibrate_camera_pt.npy"), calibrated_point, allow_pickle=True)
-        np.save(os.path.join(self._path, "left_camera_pt.npy"), flattened_left, allow_pickle=True)
-        np.save(os.path.join(self._path, "right_camera_pt.npy"), flattened_right, allow_pickle=True)
+        np.save(os.path.join(self._save_path, "calibrate_camera_pt.npy"), calibrated_point, allow_pickle=True)
+        np.save(os.path.join(self._save_path, "left_camera_pt.npy"), flattened_left, allow_pickle=True)
+        np.save(os.path.join(self._save_path, "right_camera_pt.npy"), flattened_right, allow_pickle=True)
 
         left_nsl_object = nsl.CalibrationTransformation(calibrated_points=calibrated_point,
                                                         distorted_points=flattened_left)
@@ -266,9 +269,9 @@ class CalibrationPointDetector:
         print("## Calculating transformation coefficient for right camera. ##")
         right_nsl_object.calibrate_least_square()
 
-        print(f"## Saving coefficient to the following path: {self._path} ##")
-        left_nsl_object.save_calibration_coefficient(self._path, "left_cam_coeff")
-        right_nsl_object.save_calibration_coefficient(self._path, "right_cam_coeff")
+        print(f"## Saving coefficient to the following path: {self._save_path} ##")
+        left_nsl_object.save_calibration_coefficient(self._save_path, "left_cam_coeff")
+        right_nsl_object.save_calibration_coefficient(self._save_path, "right_cam_coeff")
 
         print("## Completed the calculation of transformation coefficients ##")
 
@@ -277,7 +280,14 @@ if __name__ == "__main__":
     """
     Example execution of the class.
     """
+
     num_grid = 10
-    directory = '../3D_Experiment/Calibration/Set_4'
-    detector = CalibrationPointDetector(directory, num_grid, (40, 40))
+    left = "C:/Users/Kun Qiu/PycharmProjects/Velocity_Approx/3D_Experiment/Calibration/Left"
+    right = "C:/Users/Kun Qiu/PycharmProjects/Velocity_Approx/3D_Experiment/Calibration/Right"
+    save_path = "C:/Users/Kun Qiu/Downloads"
+    num = 10
+    dim_grid = (40, 40)
+    
+    detector = CalibrationPointDetector(left, right, save_path, 
+                                        num, dim_grid)
     detector.run_calibration()
