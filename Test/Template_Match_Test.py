@@ -27,7 +27,7 @@ from Utility import Template as tp
 # target_path = '../Data/Target/frame_2_2us.png'
 # template_path = '../Data/Template/frame_2_temp.png'
 
-experiment_path = "../2D_Experiment/Experiment"
+experiment_path = "../Tool_2D/Experiment"
 snr_values = [1, 2, 4, 8, 16]
 set_range = 1
 thresh_val = [0.83, 0.75, 0.7]

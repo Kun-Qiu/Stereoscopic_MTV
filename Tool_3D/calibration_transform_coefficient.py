@@ -4,7 +4,7 @@ import re
 import cv2
 import numpy as np
 
-import calibrate_least_square as nsl
+from Tool_3D import calibrate_least_square as nsl
 
 
 def get_sorted_corner(corners):
@@ -282,8 +282,8 @@ if __name__ == "__main__":
     """
 
     num_grid = 10
-    left = "C:/Users/Kun Qiu/PycharmProjects/Velocity_Approx/3D_Experiment/Calibration/Left"
-    right = "C:/Users/Kun Qiu/PycharmProjects/Velocity_Approx/3D_Experiment/Calibration/Right"
+    left = "C:/Users/Kun Qiu/PycharmProjects/Velocity_Approx/Tool_3D/Calibration/Left"
+    right = "C:/Users/Kun Qiu/PycharmProjects/Velocity_Approx/Tool_3D/Calibration/Right"
     save_path = "C:/Users/Kun Qiu/Downloads"
     num = 10
     dim_grid = (40, 40)

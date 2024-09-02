@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 import calibration_transform_coefficient as cd
+from Utility.Visualization import plot_interpolation
 from vel_2D_3C import Velocity2D_3C
 
 
@@ -73,7 +74,7 @@ def displace_rmse(rmse):
 
 
 # Define paths
-path = "../3D_Experiment/"
+path = "/"
 path_test = os.path.join(path, "Test")
 
 # Create corner detection object
@@ -92,8 +93,10 @@ left_pt = np.array(left_pt, dtype=np.float64)
 right_pt = np.array(right_pt, dtype=np.float64)
 
 # Translation
-left_displacement = (left_pt[121:242, :] - left_pt[0:121, :])
-right_displacement = (right_pt[121:242, :] - right_pt[0:121, :])
+# left_displacement = (left_pt[121:242, :] - left_pt[0:121, :])
+# right_displacement = (right_pt[121:242, :] - right_pt[0:121, :])
+left_displacement = (-left_pt[121:242, :] + left_pt[0:121, :])
+right_displacement = (-right_pt[121:242, :] + right_pt[0:121, :])
 
 
 def plot_displacement():
@@ -119,25 +122,25 @@ def plot_displacement():
 x, y = np.meshgrid(np.arange(20, 400, 20), np.arange(20, 400, 20))
 xyz = np.stack((x, y, np.zeros_like(x)), axis=-1)
 
-xyz_p = xyz - [200, 200, 0]
-
-# Apply the rotation
-theta = np.deg2rad(3)  # Convert 3 degrees to radians
-xp = xyz_p[:, :, 0] * np.cos(theta) + xyz_p[:, :, 1] * np.sin(theta)
-yp = -xyz_p[:, :, 0] * np.sin(theta) + xyz_p[:, :, 1] * np.cos(theta)
-zp = np.zeros_like(xp) + 2
-
-rotated_xyz_p = np.stack((xp, yp, zp), axis=-1)
-true_displace = rotated_xyz_p + [200, 200, 0] - xyz
+# xyz_p = xyz - [200, 200, 0]
+#
+# # Apply the rotation
+# theta = np.deg2rad(3)  # Convert 3 degrees to radians
+# xp = xyz_p[:, :, 0] * np.cos(theta) + xyz_p[:, :, 1] * np.sin(theta)
+# yp = -xyz_p[:, :, 0] * np.sin(theta) + xyz_p[:, :, 1] * np.cos(theta)
+# zp = np.zeros_like(xp) + 2
+#
+# rotated_xyz_p = np.stack((xp, yp, zp), axis=-1)
+# true_displace = rotated_xyz_p + [200, 200, 0] - xyz
 
 rmse_arr = []
 
 for x in range(2, 50, 2):
-# for i in range(1, 5):
-#     vel_object = Velocity2D_3C(left_pt[0:121, :], right_pt[0:121, :], left_displacement, right_displacement,
-#                                os.path.join(path, f"Calibration/Set_{i}/left_cam_coeff.npy"),
-#                                os.path.join(path, f"Calibration/Set_{i}/right_cam_coeff.npy"),
-#                                window_size=44)
+    # for i in range(1, 5):
+    #     vel_object = Velocity2D_3C(left_pt[0:121, :], right_pt[0:121, :], left_displacement, right_displacement,
+    #                                os.path.join(path, f"Calibration/Set_{i}/left_cam_coeff.npy"),
+    #                                os.path.join(path, f"Calibration/Set_{i}/right_cam_coeff.npy"),
+    #                                window_size=44)
     vel_object = Velocity2D_3C(left_pt[0:121, :], right_pt[0:121, :], left_displacement, right_displacement,
                                os.path.join(path, f"Calibration/Set_3/left_cam_coeff.npy"),
                                os.path.join(path, f"Calibration/Set_3/right_cam_coeff.npy"),
@@ -145,11 +148,25 @@ for x in range(2, 50, 2):
     displace_arr = vel_object.calculate_3D_displacement(xyz)
     grid, dXYZ_int = vel_object.interpolate_3D_displacement(xyz, displace_arr, False)
 
-    truth = np.array((1.5, 1, 1.25))
+    xyz = np.concatenate((grid, np.zeros((500, 500, 1))), axis=2)
+    xyz_p = xyz - [200, 200, 0]
+
+    # Apply the rotation
+    theta = np.deg2rad(3)  # Convert 3 degrees to radians
+    xp = xyz_p[:, :, 0] * np.cos(theta) + xyz_p[:, :, 1] * np.sin(theta)
+    yp = -xyz_p[:, :, 0] * np.sin(theta) + xyz_p[:, :, 1] * np.cos(theta)
+    zp = np.zeros_like(xp) + 2
+
+    rotated_xyz_p = np.stack((xp, yp, zp), axis=-1)
+    true_displace = rotated_xyz_p + [200, 200, 0] - xyz
+
+    # truth = true_displace
+    truth = np.array((-1, -1, -2))
+    plot_interpolation(grid, dXYZ_int, "Magnitude", contour=True, plot=True)
     # _, truth = vel_object.interpolate_3D_displacement(xyz, true_displace)
-    relative_error = (dXYZ_int - truth)
-    # plot_interpolation(grid, relative_error, "Relative Error", plot=False)
-    rmse_arr.append(rmse(dXYZ_int, truth))
+    # relative_error = dXYZ_int - truth
+    # plot_interpolation(grid, relative_error, "Relative Error", contour=True, plot=True)
+    # rmse_arr.append(rmse(dXYZ_int, truth))
 
 x_values = list(range(2, 50, 2))
 plot_window(x_values, rmse_arr)

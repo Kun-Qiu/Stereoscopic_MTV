@@ -168,13 +168,14 @@ def match_template(raw_img, img, template, polygon, use_CUDA=False, use_cython=F
 
 class TemplateMatcher:
     def __init__(self, source_image_path, target_image_path, template_path,
-                 thresh_source=0.8, thresh_target=0.8):
+                 length_path, thresh_source=0.8, thresh_target=0.8):
         """
         Default Constructor for Template Matcher
 
         :param source_image_path:       Path to the source image
         :param target_image_path:       Path to the target image
         :param template_path:           Path to the template image
+        :param length_path:             Path to the length txt file
         :param thresh_source:           Correlation threshold for source image (Default=0.8)
         :param thresh_target:           Correlation threshold for target image (Default=0.8)
         :return:                        Returns template matching object
@@ -200,7 +201,7 @@ class TemplateMatcher:
         self._target_points = None
         self._polygon = None
         self._displacement = None
-        self._length = np.loadtxt('../length.txt')
+        self._length = np.loadtxt(length_path)
         self._thresh_source = thresh_source
         self._thresh_target = thresh_target
 
@@ -330,7 +331,7 @@ class TemplateMatcher:
                                                                   radius)
         self._displacement = average_filter(moving_average_validation_arr,
                                             radius)
-        # self.visualize_match(self._source_points, self._target_points, self._displacement)
+        self.visualize_match(self._source_points, self._target_points, self._displacement)
 
     def get_boundary(self):
         return self._polygon

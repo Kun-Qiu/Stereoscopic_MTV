@@ -133,8 +133,9 @@ def test_optimization_function(source_path, target_path, template_path,
     of_object.calculate_optical_flow()
     of_field = of_object.get_flow()
 
+    length_path = "../2D_Experiment/length.txt"
     # Template Matching
-    template_object = TemplateMatching.TemplateMatcher(source_path, target_path, template_path,
+    template_object = TemplateMatching.TemplateMatcher(source_path, target_path, template_path, length_path,
                                                        thresh_source=thresh_source,
                                                        thresh_target=thresh_target)
     template_object.match_template_driver()
@@ -155,7 +156,7 @@ def test_optimization_function(source_path, target_path, template_path,
     optimized_displacement = optimize_displacement_field(model, source_image_tensor,
                                                          target_image_tensor,
                                                          observed, optimizer,
-                                                         lambda_smooth=100,
+                                                         lambda_int=100,
                                                          lambda_vel=25,
                                                          lambda_int_grad=5,
                                                          num_epochs=10000)

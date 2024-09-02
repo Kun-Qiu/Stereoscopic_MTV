@@ -4,6 +4,7 @@ import numpy as np
 
 import inverse_least_square as ils
 from interpolator import DisplacementInterpolator
+import matplotlib.pyplot as plt
 
 
 def read_numpy_file(input_var):

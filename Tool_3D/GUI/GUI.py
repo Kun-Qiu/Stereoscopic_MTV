@@ -6,7 +6,7 @@ from PyQt5.QtGui import QPixmap
 from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QFileDialog, QLabel, \
     QComboBox, QTabWidget, QScrollArea, QSizePolicy, QLineEdit, QMessageBox
 
-import calibration_transform_coefficient as cd
+from Tool_3D import calibration_transform_coefficient as cd
 
 
 class FileSelectorApp(QWidget):
@@ -53,7 +53,7 @@ class FileSelectorApp(QWidget):
         self.left_image_folder_combo.setMaximumWidth(500)
         left_folder_layout.addWidget(self.left_image_folder_combo)
 
-        left_folder_button = QPushButton("Browse Left Images")
+        left_folder_button = QPushButton("Browse")
         left_folder_button.clicked.connect(self.select_left_image_folder)
         left_folder_layout.addWidget(left_folder_button)
 
@@ -69,7 +69,7 @@ class FileSelectorApp(QWidget):
         self.right_image_folder_combo.setMaximumWidth(500)
         right_folder_layout.addWidget(self.right_image_folder_combo)
 
-        right_folder_button = QPushButton("Browse Right Images")
+        right_folder_button = QPushButton("Browse")
         right_folder_button.clicked.connect(self.select_right_image_folder)
         right_folder_layout.addWidget(right_folder_button)
 
