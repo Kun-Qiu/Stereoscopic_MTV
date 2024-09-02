@@ -4,7 +4,7 @@ from PIL import Image
 from matplotlib.pyplot import imsave
 
 
-class TifReader:
+class fileReader:
     # Public Interface
 
     def __init__(self, img, save_path):
@@ -15,7 +15,7 @@ class TifReader:
         """
         self.__img = img
         self.__save_path = save_path
-        self.__read_tif()
+        self.__read_images(save_path)
         self.__sort_array_signal()
 
     def get_uint8(self, img):
@@ -140,12 +140,14 @@ class TifReader:
                                                 [1., 2., 1.]])
     }
 
-    def __read_tif(self, path=None):
+    def __read_images(self, path):
         """
         Access the image in tif and store in an array of images
-        :param path: path to where all the files are saved
-        :return: None
+
+        :param path : Path to where all the files are saved
+        :return     : None
         """
+
         try:
             img = Image.open(self.__img)
 
