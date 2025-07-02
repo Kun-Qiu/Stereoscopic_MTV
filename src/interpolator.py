@@ -1,7 +1,7 @@
 import numpy as np
 from scipy.interpolate import griddata
 
-from Utility.Visualization import plot_interpolation
+from utility.Visualization import plot_interpolation
 
 
 class DisplacementInterpolator:
