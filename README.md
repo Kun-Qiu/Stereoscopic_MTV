@@ -1,34 +1,63 @@
-# 3D Velocity Field Approximation Using Stereoscopic Vision
+3D PIV Reconstruction with Soloff Polynomial Calibration
+=======================================================
 
-This project enables the extraction of 3D velocity field from two sets of images from a stereoscopic setup using 
-optimization of the project of a predicted 3D field onto the two stereoscopic views.
+Overview
+--------
+This project implements a stereoscopic Particle Image Velocimetry (PIV) system for 3D velocity field reconstruction using Soloff polynomial camera calibration.
 
-## Dependencies
-- `cv2`: OpenCV library for image processing
-- `numpy`: Numerical computing library
-- `torch`: PyTorch deep learning library
-- `vtk`: Visualization Toolkit for Virtual Cameras
+Soloff Polynomial Calibration
+----------------------------
+Key Features:
+- Implements Soloff polynomial mapping for stereoscopic camera calibration
+- Handles lens distortion and perspective effects
+- Supports multi-plane calibration targets
+- Provides accurate 3D coordinate reconstruction
 
-## Displacement Field Model
+Calibration Process:
+1. Calibration Target Setup:
+   - Planar target with precisely spaced markers
+   - Images acquired at multiple Z-positions (min 3 planes)
 
-The `DisplacementFieldModel` class is a PyTorch module that represents the displacement field as learnable parameters.
+2. Polynomial Formulation:
+   For each camera:
+   x = Σ(a_ijk X^i Y^j Z^k)
+   y = Σ(b_ijk X^i Y^j Z^k)
+   where:
+   - (x,y) = image coordinates
+   - (X,Y,Z) = world coordinates
+   - a_ijk, b_ijk = polynomial coefficients
+   - Typically 3rd order (i+j+k ≤ 3)
 
-## Loss Functions
+3. Coefficient Calculation:
+   - Detect target markers in calibration images
+   - Solve for coefficients using least squares
+   - Validate with reprojection error analysis
 
-The code defines several loss functions to optimize the displacement field:
+System Requirements
+------------------
+Software:
+- Python 3.7+
+- OpenCV, NumPy, SciPy, Matplotlib
 
-1. `smoothness_constraint(u, v)`: This function computes a smoothness constraint loss based on the gradients of the displacement field.
+Hardware:
+- Two synchronized cameras
+- Calibration target with known geometry
+- Adequate lighting
 
-2. `intensity_constraint(source_img, target_img, predicted_field, lambda_intensity)`: This function computes the intensity difference loss between the translated source image and the target image.
+Usage
+-----
+1. Calibration:
+   python calibrate.py --left_images left_calib/ --right_images right_calib/ --target target_spec.yaml
 
-3. `known_displace_constraint(optical_flow, template_flow, lambda_vel)`: This function computes the loss based on the difference between the predicted displacement field and the known displacement field.
+2. 3D Reconstruction:
+   python reconstruct.py --left_piv left_vectors.csv --right_piv right_vectors.csv --calib calibration_results.npz
 
-## Optimization
+Output
+------
+- Calibration coefficients (.npz format)
+- 3D velocity fields (.vtk format)
+- Validation plots
 
-The `optimize_displacement_field` function performs the main training loop to optimize the displacement field model by minimizing the combined loss.
-
-## Driver Code
-
-The driver code loads the source, target, and template images, and performs optical flow and template matching to obtain the initial displacement field. It then initializes the displacement field model and optimizes it using the defined loss functions. Finally, it visualizes the initial and optimized displacement fields.
-
-To run this code, you will need to provide the necessary input files (`source_path`, `target_path`, `template_path`, and `intersection`). The code will then generate the stereoscopic views by optimizing the displacement field.
+References
+----------
+[1] Soloff, S. M., et al. (1997). Measurement Science and Technology.
