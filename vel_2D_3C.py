@@ -2,8 +2,8 @@ import os
 
 import numpy as np
 
-import inverse_least_square as ils
-from interpolator import DisplacementInterpolator
+import src.inverse_least_square as ils
+from src.interpolator import DisplacementInterpolator
 import matplotlib.pyplot as plt
 
 
