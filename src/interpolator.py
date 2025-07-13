@@ -5,23 +5,22 @@ from utility.Visualization import plot_interpolation
 
 
 class DisplacementInterpolator:
-    def __init__(self, XY, dXY, grid_density=100, method='cubic', kx=3, ky=3, s=0):
-        assert grid_density >= 1, "Desired grid density is smaller than original density."
-        assert method.lower() == "linear" or "cubic" or "nearest"
+    def __init__(self, XY: np.ndarray, dXY: np.ndarray, grid_density: int=10, method: str='cubic'):
+        assert grid_density >= 1, "Grid density must be greater or equal to 1."
+        method = method.lower()
+        assert method in ["linear", "cubic", "nearest"], "Invalid interpolation method."
 
         self.__points = np.array(XY)
         self.__displacement = np.array(dXY)
         self.__density = grid_density
-        self.__kx = kx
-        self.__ky = ky
-        self.__s = s
         self.__method = method
 
         self.__interpolate_displacement = None
         self.__interpolate_grid = None
         self.compute_interpolate_grid()
 
-    def compute_interpolate_point(self, XY):
+
+    def compute_interpolate_point(self, XY: np.ndarray) -> np.ndarray:
         """
         Obtain the interpolated value for the point (xi, yi) given some known value
         of surrounding points.
@@ -37,7 +36,8 @@ class DisplacementInterpolator:
 
         return np.array([interpolated_x, interpolated_y])
 
-    def compute_interpolate_grid(self):
+
+    def compute_interpolate_grid(self) -> None:
         """
         Interpolate the entire displacement grid given the grid density and several known
         displacements.
@@ -56,7 +56,10 @@ class DisplacementInterpolator:
         self.__interpolate_displacement = interpolate_vector
         self.__interpolate_grid = np.dstack((X_new, Y_new))
 
-    def plot_interpolation(self, unit_label, contour=False):
+        return
+
+
+    def plot_interpolation(self, unit_label: str, contour: bool=False) -> None:
         """
         Plot the interpolation of the displacement using color plot
 
@@ -64,10 +67,15 @@ class DisplacementInterpolator:
         :param contour      :   Boolean on whether contour lines should be plotted
         :return             :   None --> Plot
         """
-        plot_interpolation(self.__interpolate_grid, self.__interpolate_displacement,
-                           unit_label=unit_label, contour=contour)
+        plot_interpolation(
+            self.__interpolate_grid, self.__interpolate_displacement,
+            unit_label=unit_label, contour=contour
+            )
+        
+        return
 
-    def get_interpolate(self):
+
+    def get_interpolate(self) -> tuple:
         """
         Get the interpolated values for the coordinate and the displacement
 
@@ -76,7 +84,6 @@ class DisplacementInterpolator:
         return self.__interpolate_grid, self.__interpolate_displacement
 
 
-# Example usage
 if __name__ == "__main__":
     # Example Usage
     x_coords = np.array([394.1424255371094, 394.06536865234375, 394.0715637207031, 394.0648193359375,

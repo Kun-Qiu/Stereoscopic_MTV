@@ -1,9 +1,9 @@
-3D PIV Reconstruction with Soloff Polynomial Calibration
+3D MTV Reconstruction with Soloff Polynomial Calibration
 =======================================================
 
 Overview
 --------
-This project implements a stereoscopic Particle Image Velocimetry (PIV) system for 3D velocity field reconstruction using Soloff polynomial camera calibration.
+This project implements a stereoscopic Molecular Tagging Velocimetry (MTV) system for 3D velocity field reconstruction using Soloff polynomial camera calibration.
 
 Soloff Polynomial Calibration
 ----------------------------

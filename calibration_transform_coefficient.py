@@ -274,10 +274,7 @@ class CalibrationPointDetector:
 
 
 if __name__ == "__main__":
-    """
-    Example execution of the class.
-    """
-
+    
     num_grid = 10
     left = "C:/Users/Kun Qiu/PycharmProjects/Velocity_Approx/Tool_3D/Calibration/Left"
     right = "C:/Users/Kun Qiu/PycharmProjects/Velocity_Approx/Tool_3D/Calibration/Right"
@@ -285,6 +282,9 @@ if __name__ == "__main__":
     num = 10
     dim_grid = (40, 40)
     
-    detector = CalibrationPointDetector(left, right, save_path, 
-                                        num, dim_grid)
+    detector = CalibrationPointDetector(
+        left, right, save_path, 
+        num, dim_grid
+        )
+    
     detector.run_calibration()

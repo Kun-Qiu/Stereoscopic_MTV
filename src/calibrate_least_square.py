@@ -1,19 +1,17 @@
 import os
-
 import numpy as np
 from scipy.optimize import least_squares
 
 
 class CalibrationTransformation:
-    def __init__(self, calibrated_points, distorted_points, num_square=10):
+    def __init__(self, calibrated_points, distorted_points):
         assert len(calibrated_points) == len(distorted_points), "Length of calibration and distortion are not equal."
-        assert num_square > 0, "Number of squares must be positive, non-zero integers."
 
         self.__calibrated_points = np.array(calibrated_points).astype(float)
         self.__distorted_points = np.array(distorted_points).astype(float)
         self.__NUM_PARAM = 19
-        self.__NUM_SQUARE = num_square
         self.__calibrate_param = np.zeros((self.__NUM_PARAM, 2))
+
 
     def __calibration_residuals_dx(self, coeff):
         """
@@ -26,6 +24,7 @@ class CalibrationTransformation:
 
         return self.__soloff_polynomial(self.__calibrated_points, coeff) - self.__distorted_points[:, 0]
 
+    
     def __calibration_residuals_dy(self, coeff):
         """
         The residual term of the calibration procedure for projection onto the y coordinate of the
@@ -36,6 +35,7 @@ class CalibrationTransformation:
         """
         return self.__soloff_polynomial(self.__calibrated_points, coeff) - self.__distorted_points[:, 1]
 
+    
     def __soloff_polynomial(self, XYZ, coeff):
         """
         Given the predicted coefficient, determine the transformation onto the image plane from an
@@ -60,6 +60,7 @@ class CalibrationTransformation:
                 (coeff[16] * (yi ** 2) * zi) + (coeff[17] * xi * (zi ** 2)) +
                 (coeff[18] * yi * (zi ** 2)))
 
+    
     def calibrate_least_square(self):
         """
         Apply the nonlinear least square to determine the transformation coefficients
@@ -77,6 +78,7 @@ class CalibrationTransformation:
                                 xtol=1.e-15, gtol=1.e-15, ftol=1.e-15, loss='cauchy').x
             self.__calibrate_param = np.column_stack((s_x, s_y))
 
+    
     def get_camera_transform_function(self):
         """
         Returns the transformation coefficient
@@ -85,6 +87,7 @@ class CalibrationTransformation:
         """
         return self.__calibrate_param
 
+    
     def clear_calibration_param(self):
         """
         Clears the camera transformation coefficients
@@ -93,6 +96,7 @@ class CalibrationTransformation:
         """
         self.__calibrate_param = np.array((self.__NUM_PARAM, 2))
 
+    
     def set_calibration_param(self, coeffs):
         """
         Set the object's transformation to a user defined coefficient
@@ -104,6 +108,7 @@ class CalibrationTransformation:
             f"Input parameter does not have the shape of ({self.__NUM_PARAM}, 2)."
         self.__calibrate_param = coeffs
 
+    
     def save_calibration_coefficient(self, path, name):
         """
         Save the transformation coefficient to a desired path

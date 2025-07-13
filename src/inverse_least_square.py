@@ -11,6 +11,7 @@ class InverseTransform:
         self.__left_calibrate_coeff = left_coefficient
         self.__right_calibrate_coeff = right_coefficient
 
+    
     def __inverse_polynomial_transform_point(self, predicted_object_pt, img_pt_left, img_pt_right):
         """
         Residual for the prediction based on the inputted image point from the left and right camera
@@ -63,8 +64,12 @@ class InverseTransform:
                coeff_y_right[15] * xi * yi * zi + coeff_y_right[16] * (yi ** 2) * zi +
                coeff_y_right[17] * xi * (zi ** 2) + coeff_y_right[18] * yi * (zi ** 2))
 
-        return [eq1 - img_pt_left[0], eq2 - img_pt_left[1], eq3 - img_pt_right[0], eq4 - img_pt_right[1]]
+        return [
+            eq1 - img_pt_left[0], eq2 - img_pt_left[1], 
+            eq3 - img_pt_right[0], eq4 - img_pt_right[1]
+            ]
 
+    
     def inverse_point_least_square(self, left_img_pts, right_img_pts):
         """
         Apply the nonlinear least square using algorithm provided by SciPy Optimization Library
@@ -88,6 +93,7 @@ class InverseTransform:
 
         return result.x
 
+    
     def __dFdx(self, XYZ, a):
         """
         Derivative of the Soloff polynomial in the x-direction
@@ -105,6 +111,7 @@ class InverseTransform:
                 a[12] * pow(yi, 2) + 2 * a[14] * xi * zi +
                 a[15] * yi * zi + a[17] * pow(zi, 2))
 
+    
     def __dFdy(self, XYZ, a):
         """
         Derivative of the Soloff polynomial in the y-direction
@@ -122,6 +129,7 @@ class InverseTransform:
                 3 * a[13] * pow(yi, 2) + a[15] * xi * zi +
                 2 * a[16] * yi * zi + a[18] * pow(zi, 2))
 
+    
     def __dFdz(self, XYZ, a):
         """
         Derivative of the Soloff polynomial in the z-direction
@@ -138,6 +146,7 @@ class InverseTransform:
                 a[14] * pow(xi, 2) + a[15] * xi * yi + a[16] * pow(yi, 2) +
                 2 * a[17] * xi * zi + 2 * a[18] * yi * zi)
 
+    
     def __inverse_augmented_matrix(self, XYZ, a):
         """
         Obtain the augmented matrix for the transformation from object plane displacement to
@@ -162,6 +171,7 @@ class InverseTransform:
 
         return F11, F12, F13, F21, F22, F23
 
+    
     def __inverse_displacement_transform_residual(self, dxyz, xyz, dXY_l, dXY_r):
         """
         Compute the residual between the predicted object plane displacement and the
@@ -191,6 +201,7 @@ class InverseTransform:
         return [dXY_l[0] - dXY[0], dXY_l[1] - dXY[1],
                 dXY_r[0] - dXY[2], dXY_r[1] - dXY[3]]
 
+    
     def inverse_displacement(self, xyz, dXY_l, dXY_r):
         """
         Apply the nonlinear least square using algorithm provided by SciPy Optimization Library
@@ -217,6 +228,7 @@ class InverseTransform:
 
         return result.x
 
+    
     def projection_object_to_image(self, point, camera_name):
         """
         Function to project points on the object plane to the corresponding point on the

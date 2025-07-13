@@ -1,5 +1,4 @@
 import os
-
 import numpy as np
 
 import src.inverse_least_square as ils
@@ -108,6 +107,7 @@ class Velocity2D_3C:
                     dXY_2D[i, j] = [avg_dx, avg_dy]
 
         return dXY_2D
+    
 
     def interpolate_3D_displacement(self, XY, dXYZ, display=False):
         """
