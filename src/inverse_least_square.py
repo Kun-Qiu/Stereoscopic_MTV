@@ -87,9 +87,12 @@ class InverseTransform:
                                         (left_img_pts[1] + right_img_pts[1]) / 2,
                                         0), dtype=np.float64)
 
-        result = least_squares(self.__inverse_polynomial_transform_point, x0=object_pt_predicted, method='trf',
-                               xtol=1.e-15, gtol=1.e-15, ftol=1.e-15, loss='cauchy',
-                               args=(left_img_pts, right_img_pts))
+        result = least_squares(
+            self.__inverse_polynomial_transform_point, 
+            x0=object_pt_predicted, method='trf',
+            xtol=1.e-15, gtol=1.e-15, ftol=1.e-15, loss='cauchy',
+            args=(left_img_pts, right_img_pts)
+            )
 
         return result.x
 
@@ -124,10 +127,12 @@ class InverseTransform:
 
         assert a.shape == (self.__NUM_PARAM,), f"Coefficient has incorrect shape: {a.shape}."
 
-        return (a[2] + a[5] * xi + 2 * a[6] * yi + a[8] * zi +
-                a[11] * pow(xi, 2) + 2 * a[12] * xi * yi +
-                3 * a[13] * pow(yi, 2) + a[15] * xi * zi +
-                2 * a[16] * yi * zi + a[18] * pow(zi, 2))
+        return (
+            a[2] + a[5] * xi + 2 * a[6] * yi + a[8] * zi +
+            a[11] * pow(xi, 2) + 2 * a[12] * xi * yi +
+            3 * a[13] * pow(yi, 2) + a[15] * xi * zi +
+            2 * a[16] * yi * zi + a[18] * pow(zi, 2)
+            )
 
     
     def __dFdz(self, XYZ, a):
@@ -142,9 +147,11 @@ class InverseTransform:
 
         assert a.shape == (self.__NUM_PARAM,), f"Coefficient has incorrect shape: {a.shape}."
 
-        return (a[3] + a[7] * xi + a[8] * yi + 2 * a[9] * zi +
-                a[14] * pow(xi, 2) + a[15] * xi * yi + a[16] * pow(yi, 2) +
-                2 * a[17] * xi * zi + 2 * a[18] * yi * zi)
+        return (
+            a[3] + a[7] * xi + a[8] * yi + 2 * a[9] * zi +
+            a[14] * pow(xi, 2) + a[15] * xi * yi + a[16] * pow(yi, 2) +
+            2 * a[17] * xi * zi + 2 * a[18] * yi * zi
+            )
 
     
     def __inverse_augmented_matrix(self, XYZ, a):
@@ -191,15 +198,26 @@ class InverseTransform:
         assert dXY_l.shape == dXY_r.shape == (2,), f"The shape of the camera displacements should be (3, 1). " \
                                                    f"Shape of left cam: {dXY_l.shape} and right cam: {dXY_r.shape}."
 
-        F11_1, F12_1, F13_1, F21_1, F22_1, F23_1 = self.__inverse_augmented_matrix(xyz, self.__left_calibrate_coeff)
-        F11_2, F12_2, F13_2, F21_2, F22_2, F23_2 = self.__inverse_augmented_matrix(xyz, self.__right_calibrate_coeff)
+        F11_1, F12_1, F13_1, F21_1, F22_1, F23_1 = self.__inverse_augmented_matrix(
+            xyz, 
+            self.__left_calibrate_coeff
+            )
+        
+        F11_2, F12_2, F13_2, F21_2, F22_2, F23_2 = self.__inverse_augmented_matrix(
+            xyz, 
+            self.__right_calibrate_coeff
+            )
 
-        F = np.array(([F11_1, F12_1, F13_1], [F21_1, F22_1, F23_1],
-                      [F11_2, F12_2, F13_2], [F21_2, F22_2, F23_2]))
+        F = np.array((
+            [F11_1, F12_1, F13_1], [F21_1, F22_1, F23_1],
+            [F11_2, F12_2, F13_2], [F21_2, F22_2, F23_2]
+            ))
 
         dXY = np.dot(F, dxyz)
-        return [dXY_l[0] - dXY[0], dXY_l[1] - dXY[1],
-                dXY_r[0] - dXY[2], dXY_r[1] - dXY[3]]
+        return [
+            dXY_l[0] - dXY[0], dXY_l[1] - dXY[1],
+            dXY_r[0] - dXY[2], dXY_r[1] - dXY[3]
+            ]
 
     
     def inverse_displacement(self, xyz, dXY_l, dXY_r):
@@ -218,13 +236,18 @@ class InverseTransform:
         :return         :   Optimized (dx, dy, dz) at a specific interest point
         """
 
-        dxyz_hat = np.array(((dXY_l[0] + dXY_r[0]) / 2,
-                             (dXY_l[1] + dXY_r[1]) / 2,
-                             0), dtype=np.float64)
+        dxyz_hat = np.array((
+            (dXY_l[0] + dXY_r[0]) / 2,
+            (dXY_l[1] + dXY_r[1]) / 2,
+            0
+            ), dtype=np.float64)
 
-        result = least_squares(self.__inverse_displacement_transform_residual, x0=dxyz_hat, method='trf',
-                               xtol=1.e-15, gtol=1.e-15, ftol=1.e-15, loss='cauchy',
-                               args=(xyz, dXY_l, dXY_r))
+        result = least_squares(
+            self.__inverse_displacement_transform_residual, 
+            x0=dxyz_hat, method='trf',
+            xtol=1.e-15, gtol=1.e-15, ftol=1.e-15, loss='cauchy',
+            args=(xyz, dXY_l, dXY_r)
+            )
 
         return result.x
 

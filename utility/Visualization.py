@@ -1,7 +1,6 @@
 import matplotlib.pyplot as plt
 import numpy as np
-import torch
-
+from pathlib import Path
 
 def visualize_displacement(image, name, field, step, show_img=False, save_path=None):
     """
@@ -18,13 +17,9 @@ def visualize_displacement(image, name, field, step, show_img=False, save_path=N
     else:
         height, width = image.shape  # Assuming a grayscale image
 
-    field = torch.tensor(field)
-    magnitudes = torch.sqrt(torch.sum(field ** 2, dim=2))
-
-    magnitudes_numpy = magnitudes.detach().numpy()
-    field_numpy = field.detach().numpy()
-
-    length, height, color = image.shape
+    field = np.asarray(field)
+    magnitudes = np.linalg.norm(field, axis=2)
+    length, height, _ = image.shape
 
     plt.figure(figsize=(8, 6))
     if show_img:
@@ -32,15 +27,15 @@ def visualize_displacement(image, name, field, step, show_img=False, save_path=N
 
     if length == width:
         plt.quiver(range(0, length, step), range(0, height, step),
-                   field_numpy[::step, ::step, 0], field_numpy[::step, ::step, 1],
-                   magnitudes_numpy[::step, ::step],
+                   field[::step, ::step, 0], field[::step, ::step, 1],
+                   magnitudes[::step, ::step],
                    angles='xy', scale_units='xy', scale=1, cmap='viridis')
     else:
         step_x = 9
         step_y = 16
         plt.quiver(range(0, height, step_y), range(0, length, step_x),
-                   field_numpy[::step_x, ::step_y, 0], field_numpy[::step_x, ::step_y, 1],
-                   magnitudes_numpy[::step_x, ::step_y],
+                   field[::step_x, ::step_y, 0], field[::step_x, ::step_y, 1],
+                   magnitudes[::step_x, ::step_y],
                    angles='xy', scale_units='xy', scale=1, cmap='viridis')
     plt.colorbar()
     plt.title(name)
@@ -61,10 +56,6 @@ def visualize_displacement_difference(field1, field2, image, save_path=None):
     :param image:       Image data
     """
     # Compute the difference field
-    if torch.is_tensor(field1):
-        field1 = field1.detach().numpy()
-    if torch.is_tensor(field2):
-        field2 = field2.detach().numpy()
     diff_field = field2 - field1
 
     # Compute magnitudes
@@ -84,39 +75,71 @@ def visualize_displacement_difference(field1, field2, image, save_path=None):
         print(f"Figure saved to {save_path}")
 
 
-def plot_interpolation(XY, dXYZ, unit_label, contour=False, plot=True):
+def plot_interpolation(
+    XY: np.ndarray, 
+    dXYZ: np.ndarray,
+    name: str,
+    unit: str, 
+    contour: bool = False, 
+    path: str | None = None
+) -> None:
     """
-    Plot the given dXYZ array whether it is 1D, 2D, 3D with the associated
-    common colorbar.
+    Plot the given dXYZ array (2D/3D) with individual color scales for each component.
+    Saves each component as a separate figure if path is provided, and also shows a combined figure.
 
-    :param XY               :   The input coordinates
-    :param dXYZ             :   The array that needed to be plotted
-    :param unit_label       :   Label for the color bar (unit)
-    :param contour          :   Boolean on whether contour line should be plotted
-    :param plot             :   Boolean on whether to plot the figure
-    :return                 :   Plot of the desired dXYZ with common colorbar
+    :param XY               : The input coordinates, shape (n, m, 2)
+    :param dXYZ             : The array to be plotted, shape (n, m, n_components)
+    :param unit_label       : Label for the color bar (unit)
+    :param contour          : Boolean on whether contour lines should be plotted
+    :param path             : Optional path to save individual component figures
     """
-
     XY, dXYZ = np.array(XY), np.array(dXYZ)
+    n_components = dXYZ.shape[2]
 
-    fig, axes = plt.subplots(nrows=dXYZ.shape[2], ncols=1, figsize=(8, 6))
+    # Create combined figure with subplots
+    fig_comb, axes_comb = plt.subplots(nrows=n_components, ncols=1, figsize=(8, 4*n_components))
+    if n_components == 1:
+        axes_comb = [axes_comb]
 
-    vmin = np.min(dXYZ)
-    vmax = np.max(dXYZ)
+    for i, ax in enumerate(axes_comb):
+        vmin = np.nanmin(dXYZ[:, :, i])
+        vmax = np.nanmax(dXYZ[:, :, i])
 
-    for i, ax in enumerate(axes):
-        im = ax.pcolormesh(XY[:, :, 0], XY[:, :, 1], dXYZ[:, :, i], vmin=vmin, vmax=vmax, shading='auto')
+        im = ax.pcolormesh(
+            XY[:, :, 0], XY[:, :, 1], dXYZ[:, :, i],
+            vmin=vmin, vmax=vmax,
+            shading='auto'
+        )
         ax.set_title(f'Component {i}')
 
         if contour:
-            contour_levels = np.linspace(vmin, vmax, 10)
-            ax.contour(XY[:, :, 0], XY[:, :, 1], dXYZ[:, :, i], levels=contour_levels, colors='k', linewidths=0.5)
+            levels = np.linspace(vmin, vmax, 10)
+            ax.contour(XY[:, :, 0], XY[:, :, 1], dXYZ[:, :, i], levels=levels, colors='k', linewidths=0.5)
 
-    fig.subplots_adjust(hspace=0.5)
-    cbar = fig.colorbar(im, ax=axes.ravel().tolist(), location='right')
-    cbar.set_label(f'{unit_label}', fontsize=11)
-    fig.supylabel("Y Coordinate [mm]")
-    fig.supxlabel("X Coordinate [mm]")
+        cbar = fig_comb.colorbar(im, ax=ax, location='right')
+        cbar.set_label(name)
 
-    if plot:
-        plt.show()
+        # Save each component as its own figure if path provided
+        if path is not None:
+            Path(path).mkdir(parents=True, exist_ok=True)
+            fig_single, ax_single = plt.subplots(figsize=(6, 5))
+            im_single = ax_single.pcolormesh(
+                XY[:, :, 0], XY[:, :, 1], dXYZ[:, :, i],
+                vmin=vmin, vmax=vmax,
+                shading='auto'
+            )
+            if contour:
+                ax_single.contour(XY[:, :, 0], XY[:, :, 1], dXYZ[:, :, i], levels=levels, colors='k', linewidths=0.5)
+            ax_single.set_title(f'Component {i}')
+            cbar_single = fig_single.colorbar(im_single, ax=ax_single, location='right')
+            cbar_single.set_label(f"{name} [{unit}]")
+            fig_single.supxlabel(f"X Coordinate [mm]")
+            fig_single.supylabel(f"Y Coordinate [mm]")
+            fig_single.tight_layout()
+            fig_single.savefig(Path(path) / f"{name}_component_{i}.png")
+            plt.close(fig_single) 
+
+    fig_comb.supxlabel("X Coordinate [mm]")
+    fig_comb.supylabel("Y Coordinate [mm]")
+    fig_comb.tight_layout()
+    plt.show()

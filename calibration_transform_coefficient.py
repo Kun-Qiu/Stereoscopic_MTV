@@ -1,6 +1,5 @@
 import os, re, cv2
 import numpy as np
-
 import src.calibrate_least_square as nsl
 
 
@@ -52,7 +51,6 @@ def manual_detection_corners(img, detected_corners, handle_mouse_bool=False):
 
     # Sub_Pixel Accuracy
     criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
-
     if handle_mouse_bool:
         def handle_mouse(event, x, y, flags, param):
             nonlocal img_copy, detected_corners
@@ -102,10 +100,10 @@ def detect_corners(image_set_path):
         gray = np.float32(gray)
         dst = cv2.cornerHarris(gray, 2, 3, 0.04)
         dst = cv2.dilate(dst, None)
-        ret, dst = cv2.threshold(dst, 0.01 * dst.max(), 255, 0)
+        _, dst = cv2.threshold(dst, 0.01 * dst.max(), 255, 0)
         dst = np.uint8(dst)
 
-        ret, labels, stats, centroids = cv2.connectedComponentsWithStats(dst)
+        _, _, _, centroids = cv2.connectedComponentsWithStats(dst)
         criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 100, 0.001)
         corners = cv2.cornerSubPix(gray, np.float32(centroids), (11, 11), (-1, -1), criteria)
         single_img_corners = manual_detection_corners(img, corners, handle_mouse_bool=True)
@@ -119,26 +117,26 @@ def detect_corners(image_set_path):
             else:
                 i += 1
         all_img_corners.extend(sorted_corners)
-
     all_img_corners = np.array(all_img_corners, dtype=object)
     return all_img_corners
 
 
 class CalibrationPointDetector:
-    def __init__(self, path_left, path_right, save_path, num_square, shape=(40, 40)):
+    def __init__(self, path_left, path_right, save_path, num_square, shape=(2, 2)):
         assert os.path.exists(path_left), f"Given path: {path_left}, does not exist."
         assert os.path.exists(path_right), f"Given path: {path_right}, does not exist."
         assert os.path.exists(save_path), f"Given path: {save_path}, does not exist."
         assert num_square > 0, "Number of squares must be positive, non-zero integers."
         assert all(dim > 0 for dim in shape), "Dimensions of squares must be positive, non-zero integers."
 
-        self._path_left = path_left
-        self._path_right = path_right
         self._save_path = save_path
         self._num_square = num_square
-        self._left_image_set = self._find_all_calibration_image(self._path_left)
-        self._right_image_set = self._find_all_calibration_image(self._path_right)
         self._calibrate_shape = shape
+        self._calibrated_points = None
+
+        self._left_image_set = self._find_all_calibration_image(path_left)
+        self._right_image_set = self._find_all_calibration_image(path_right)
+
 
     def _object_plane_param(self, z_coords, x_offset=0, y_offset=0, dx=None, dy=None):
         """
@@ -172,25 +170,26 @@ class CalibrationPointDetector:
 
         return np.array(calibrate_coordinates)
 
-    def get_right_param(self):
+
+    def get_right_param(self, name:str|None=None):
         """
         Get the detected corner on the right image
-
-        :return :   Right corners
         """
         right_corners = detect_corners(self._right_image_set[:, 0])
-        np.save(os.path.join(self._save_path, "right_camera_pos.npy"), right_corners)
+        if name is not None:
+            np.save(os.path.join(self._save_path, f"{name}.npy"), right_corners)
         return right_corners
 
-    def get_left_param(self):
+
+    def get_left_param(self, name:str|None=None):
         """
         Get the detected corner on the left image
-
-        :return :   Right corners
         """
         left_corners = detect_corners(self._left_image_set[:, 0])
-        np.save(os.path.join(self._save_path, "left_camera_pos.npy"), left_corners)
+        if name is not None:
+            np.save(os.path.join(self._save_path, f"{name}.npy"), left_corners)
         return left_corners
+
 
     def get_initial_calibrate_corners(self, x_offset=0, y_offset=0, dx=None, dy=None):
         """
@@ -203,8 +202,12 @@ class CalibrationPointDetector:
         :return         :   Actual 3D coordinates after the displacement
         """
 
-        original_pts = self._object_plane_param(self._left_image_set[:, 1],
-                                                x_offset, y_offset, dx, dy)
+        original_pts = self._object_plane_param(
+            self._left_image_set[:, 1],
+            x_offset, y_offset, 
+            dx, dy
+            )
+        
         if dx == dy is None:
             np.save(os.path.join(self._save_path, "3D_camera_pos.npy"), original_pts)
         else:
@@ -212,13 +215,11 @@ class CalibrationPointDetector:
 
         return original_pts
 
+
     def _find_all_calibration_image(self, path):
         """
-        Find all the calibration images within a folder and extract the depth information from the name.
-        Purpose: Used to find Soloff polynomial to map 3D coordinates to 2D coordinates in image plane.
-
-        :param path :   Path of the calibration image path
-        :return     :   Two set of calibration images path (Left and right camera)
+        Find all the calibration images within a folder and 
+        extract the depth information from the name.
         """
         image_filenames = []
         for root, _, files in os.walk(path):
@@ -234,17 +235,16 @@ class CalibrationPointDetector:
                 image_set.append([filename, float(match.group(1))])
         return np.array(image_set, dtype=object)
 
+
     def run_calibration(self):
         """
         Main driver for the execution of the checkerboard detection object
-
-        :return : Save the calibration coefficient of left and right camera to the same folder
-                  as the calibration images.
         """
 
+        # Extract the z-coordinate during calibration
         calibrated_point = np.array(self._object_plane_param(self._left_image_set[:, 1]))
 
-        print("## Detecting Calibration Corners ##")
+        print("Detecting Calibration Corners...")
         flattened_left = detect_corners(self._left_image_set[:, 0])
         flattened_right = detect_corners(self._right_image_set[:, 0])
 
@@ -255,36 +255,37 @@ class CalibrationPointDetector:
         np.save(os.path.join(self._save_path, "left_camera_pt.npy"), flattened_left, allow_pickle=True)
         np.save(os.path.join(self._save_path, "right_camera_pt.npy"), flattened_right, allow_pickle=True)
 
-        left_nsl_object = nsl.CalibrationTransformation(calibrated_points=calibrated_point,
-                                                        distorted_points=flattened_left)
-        right_nsl_object = nsl.CalibrationTransformation(calibrated_points=calibrated_point,
-                                                         distorted_points=flattened_right)
+        left_nsl_object = nsl.CalibrationTransformation(
+            calibrated_points=calibrated_point,
+            distorted_points=flattened_left
+            )
+        
+        right_nsl_object = nsl.CalibrationTransformation(
+            calibrated_points=calibrated_point,
+            distorted_points=flattened_right
+            )
 
-        print("## Calculating transformation coefficient for left camera. ##")
+        print("Calculating transformation coefficient for cameras...")
         left_nsl_object.calibrate_least_square()
-
-        print("## Calculating transformation coefficient for right camera. ##")
         right_nsl_object.calibrate_least_square()
 
-        print(f"## Saving coefficient to the following path: {self._save_path} ##")
+        print(f"Saving coefficient to the following path: {self._save_path}")
         left_nsl_object.save_calibration_coefficient(self._save_path, "left_cam_coeff")
         right_nsl_object.save_calibration_coefficient(self._save_path, "right_cam_coeff")
 
-        print("## Completed the calculation of transformation coefficients ##")
-
+        print("Completed the calculation of transformation coefficients")
 
 if __name__ == "__main__":
-    
-    num_grid = 10
-    left = "C:/Users/Kun Qiu/PycharmProjects/Velocity_Approx/Tool_3D/Calibration/Left"
-    right = "C:/Users/Kun Qiu/PycharmProjects/Velocity_Approx/Tool_3D/Calibration/Right"
-    save_path = "C:/Users/Kun Qiu/Downloads"
-    num = 10
-    dim_grid = (40, 40)
+
+    left = r"C:\Users\Kun Qiu\Desktop\Thesis_2026\Calibration_Volume\left"
+    right = r"C:\Users\Kun Qiu\Desktop\Thesis_2026\Calibration_Volume\right"
+    save_path = r"C:\Users\Kun Qiu\Desktop\Thesis_2026\Calibration_Volume"
+    num_square = 20
+    dim_grid = (20, 20) # Grid squares are 20 mm x 20 mm
     
     detector = CalibrationPointDetector(
         left, right, save_path, 
-        num, dim_grid
+        num_square, dim_grid
         )
     
     detector.run_calibration()

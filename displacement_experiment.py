@@ -1,174 +1,139 @@
 import os
-
 import matplotlib.pyplot as plt
 import numpy as np
 
-import src.calibration_transform_coefficient as cd
-from Utility.Visualization import plot_interpolation
+import calibration_transform_coefficient as cd
+from utility.Visualization import plot_interpolation
 from vel_2D_3C import Velocity2D_3C
 
 
-def plot_window(x_label, rmse, plot=False):
-    assert len(rmse_arr) == len(x_label), "rmse_arr should have same number of values as x_label."
-
-    plt.figure(figsize=(10, 5))
-
-    u = [l[0] for l in rmse]
-    v = [l[1] for l in rmse]
-    w = [l[2] for l in rmse]
-
-    plt.plot(x_label, u, marker='o', label='X Component')  # RMSE for the X component
-    plt.plot(x_label, v, marker='s', label='Y Component')  # RMSE for the Y component
-    plt.plot(x_label, w, marker='^', label='Z Component')  # RMSE for the Z component
-
-    plt.xlabel('Window Size')
-    plt.ylabel('RMSE [mm]')
-    plt.title('RMSE vs. Window Size for Each Component')
-    plt.legend(loc='upper right')
-    if plot:
-        plt.show()
-
-
-def rmse(dXYZ, truth):
-    if len(truth.shape) > 1:
-        x_diff = dXYZ[:, 0].flatten() - truth[:, 0].flatten()
-        y_diff = dXYZ[:, 1].flatten() - truth[:, 1].flatten()
-        z_diff = dXYZ[:, 2].flatten() - truth[:, 2].flatten()
-    else:
-        x_diff = dXYZ[:, 0].flatten() - truth[0]
-        y_diff = dXYZ[:, 1].flatten() - truth[1]
-        z_diff = dXYZ[:, 2].flatten() - truth[2]
-
-    x_rmse = np.sqrt(np.mean(np.square(x_diff), axis=0))
-    y_rmse = np.sqrt(np.mean(np.square(y_diff), axis=0))
-    z_rmse = np.sqrt(np.mean(np.square(z_diff), axis=0))
-
-    return [x_rmse, y_rmse, z_rmse]
-
-
-def displace_rmse(rmse):
-    x_labels = ["3", "5", "7", "9"]
-
-    fig, ax = plt.subplots()
-    x = range(len(rmse))
-
-    u = [l[0] for l in rmse]
-    v = [l[1] for l in rmse]
-    w = [l[2] for l in rmse]
-
-    ax.scatter(x, u, label='X', marker='o')
-    ax.scatter(x, v, label='Y', marker='s')
-    ax.scatter(x, w, label='Z', marker='^')
-
-    ax.plot(x, u, 'o--', ms=2)
-    ax.plot(x, v, 's--', ms=2)
-    ax.plot(x, w, '^--', ms=2)
-
-    ax.set_xlabel('Number of Calibration Set')
-    ax.set_xticks(x)
-    ax.set_xticklabels(x_labels)
-    ax.set_ylabel('RMSE [mm]')
-    # Set legend location to 'upper right' and make room for it if it overlaps data
-    ax.legend(loc='upper right')
-    # plt.show()
-
-
 # Define paths
-path = "/"
-path_test = os.path.join(path, "Test")
+base_path = r"C:\Users\Kun Qiu\Desktop\Thesis_2026"
+calibration_path = os.path.join(base_path, "Calibration_Volume")
+test_path = os.path.join(base_path, "Test_Cases")
+save_path = r"C:\Users\Kun Qiu\Desktop\Thesis_2026\Test_Cases\res"
 
-# Create corner detection object
-corner_detection_object = cd.CalibrationPointDetector(path_test, 10, (40, 40))
-left_pos_path = os.path.join(path_test, "left_camera_pos.npy")
-right_pos_path = os.path.join(path_test, "right_camera_pos.npy")
+############### Experimental Cases ###############
+## Reference Image
+ref_path = r"C:\Users\Kun Qiu\Desktop\Thesis_2026\Test_Cases\ref"
+ref_l_path = os.path.join(ref_path, "left")
+ref_r_path = os.path.join(ref_path, "right")
+ref_obj = cd.CalibrationPointDetector(
+    ref_l_path, ref_r_path, save_path, 10, (20, 20)
+    )
 
-if not (os.path.exists(left_pos_path) and os.path.exists(right_pos_path)):
-    left_pt = corner_detection_object.get_left_param()
-    right_pt = corner_detection_object.get_right_param()
-else:
-    left_pt = np.load(left_pos_path, allow_pickle=True)
-    right_pt = np.load(right_pos_path, allow_pickle=True)
+ref_left_pt = np.array(
+    np.load(
+        r"C:\Users\Kun Qiu\Desktop\Thesis_2026\Test_Cases\res\ref_left.npy",
+        allow_pickle=True), 
+    dtype=np.float64
+    )
+ref_right_pt = np.array(
+    np.load(
+        r"C:\Users\Kun Qiu\Desktop\Thesis_2026\Test_Cases\res\ref_right.npy",
+        allow_pickle=True), 
+    dtype=np.float64
+    )
 
-left_pt = np.array(left_pt, dtype=np.float64)
-right_pt = np.array(right_pt, dtype=np.float64)
+## Case 1: Displacement due in plane rotation only
+case_path = r"C:\Users\Kun Qiu\Desktop\Thesis_2026\Test_Cases\in_plane"
+test_l_path = os.path.join(case_path, "left")
+test_r_path = os.path.join(case_path, "right")
+case_obj = cd.CalibrationPointDetector(
+    test_l_path, test_r_path, save_path, 10, (20, 20)
+    )
 
-# Translation
-# left_displacement = (left_pt[121:242, :] - left_pt[0:121, :])
-# right_displacement = (right_pt[121:242, :] - right_pt[0:121, :])
-left_displacement = (-left_pt[121:242, :] + left_pt[0:121, :])
-right_displacement = (-right_pt[121:242, :] + right_pt[0:121, :])
+# Obatin position in image plane of left and right camera points
+# test_left_pt = np.array(case_obj.get_left_param("left_in_plane"), dtype=np.float64)
+# test_right_pt = np.array(case_obj.get_right_param("right_in_plane"), dtype=np.float64)
 
+test_left_pt = np.array(
+    np.load(
+        r"C:\Users\Kun Qiu\Desktop\Thesis_2026\Test_Cases\res\left_in_plane.npy",
+        allow_pickle=True), 
+    dtype=np.float64
+    )
+test_right_pt = np.array(
+    np.load(
+        r"C:\Users\Kun Qiu\Desktop\Thesis_2026\Test_Cases\res\right_in_plane.npy",
+        allow_pickle=True), 
+    dtype=np.float64
+    )
 
-def plot_displacement():
-    # Create a figure and axes
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
+# Displacement Calculations
+left_displacement = (test_left_pt - ref_left_pt)
+right_displacement = (test_right_pt - ref_right_pt)
 
-    # Plot the X component of displacement
-    ax1.quiver(left_pt[0:121, 0], left_pt[0:121, 1], left_displacement[0:121, 0], left_displacement[0:121, 1],
-               color='b', scale=1, scale_units='xy', angles='xy', label='Left X')
-    ax1.set_title('Left Camera')
+fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
 
-    ax2.quiver(right_pt[0:121, 0], right_pt[0:121, 1], right_displacement[0:121, 0], right_displacement[0:121, 1],
-               color='r', scale=1, scale_units='xy', angles='xy', label='Right Y')
-    ax2.set_xlabel('X position')
-    ax2.set_ylabel('Y position')
-    ax2.set_title('Right Camera')
+ax1.quiver(
+    ref_left_pt[..., 0].ravel(), ref_left_pt[..., 1].ravel(), 
+    left_displacement[..., 0].ravel(), left_displacement[..., 1].ravel(),
+    color='b', scale=0.5, scale_units='xy', angles='xy', label='Left X'
+    )
+ax1.set_xlabel('X position')
+ax1.set_ylabel('Y position')
+ax1.set_title('Left Camera')
 
-    # plt.show()
+ax2.quiver(
+    ref_right_pt[..., 0].ravel(), ref_right_pt[..., 1].ravel(), 
+    right_displacement[..., 0].ravel(), right_displacement[..., 1].ravel(),
+    color='r', scale=0.5, scale_units='xy', angles='xy', label='Right Y'
+    )
+ax2.set_xlabel('X position')
+ax2.set_title('Right Camera')
 
+############ Initialize the Ground Truth Measurements ################
 
-# plot_displacement()
-
-x, y = np.meshgrid(np.arange(20, 400, 20), np.arange(20, 400, 20))
+# Default xyz is the calibration target dimensions
+calibration_dim = 400   # 400 mm on each side 
+square_dim = 20
+x, y = np.meshgrid(
+    np.arange(0, calibration_dim+square_dim, square_dim), 
+    np.arange(0, calibration_dim+square_dim, square_dim)
+    )
 xyz = np.stack((x, y, np.zeros_like(x)), axis=-1)
 
-# xyz_p = xyz - [200, 200, 0]
-#
-# # Apply the rotation
-# theta = np.deg2rad(3)  # Convert 3 degrees to radians
-# xp = xyz_p[:, :, 0] * np.cos(theta) + xyz_p[:, :, 1] * np.sin(theta)
-# yp = -xyz_p[:, :, 0] * np.sin(theta) + xyz_p[:, :, 1] * np.cos(theta)
-# zp = np.zeros_like(xp) + 2
-#
-# rotated_xyz_p = np.stack((xp, yp, zp), axis=-1)
-# true_displace = rotated_xyz_p + [200, 200, 0] - xyz
+# In-Plane Rotational Field Ground Truth
+rotation = 2 # degrees
+xyz_p = xyz - [calibration_dim/2, calibration_dim/2, 0]  # Center the coordinates
 
-rmse_arr = []
+theta = np.deg2rad(rotation) 
+xp = xyz_p[:, :, 0] * np.cos(theta) + xyz_p[:, :, 1] * np.sin(theta)
+yp = -xyz_p[:, :, 0] * np.sin(theta) + xyz_p[:, :, 1] * np.cos(theta)
+zp = np.zeros_like(xp)
 
-for x in range(2, 50, 2):
-    # for i in range(1, 5):
-    #     vel_object = Velocity2D_3C(left_pt[0:121, :], right_pt[0:121, :], left_displacement, right_displacement,
-    #                                os.path.join(path, f"Calibration/Set_{i}/left_cam_coeff.npy"),
-    #                                os.path.join(path, f"Calibration/Set_{i}/right_cam_coeff.npy"),
-    #                                window_size=44)
-    vel_object = Velocity2D_3C(left_pt[0:121, :], right_pt[0:121, :], left_displacement, right_displacement,
-                               os.path.join(path, f"Calibration/Set_3/left_cam_coeff.npy"),
-                               os.path.join(path, f"Calibration/Set_3/right_cam_coeff.npy"),
-                               window_size=x)
-    displace_arr = vel_object.calculate_3D_displacement(xyz)
-    grid, dXYZ_int = vel_object.interpolate_3D_displacement(xyz, displace_arr, False)
+in_plane_disp = np.stack((xp, yp, zp), axis=-1) - xyz_p 
 
-    xyz = np.concatenate((grid, np.zeros((500, 500, 1))), axis=2)
-    xyz_p = xyz - [200, 200, 0]
+############ Initialize the Velocity2D_3C object ################
+left_cam_coeff_path = os.path.join(calibration_path, "left_cam_coeff.npy")
+right_cam_coeff_path = os.path.join(calibration_path, "right_cam_coeff.npy")
+vel_object = Velocity2D_3C(
+    ref_left_pt, ref_right_pt, 
+    left_displacement, right_displacement,
+    left_cam_coeff_path, right_cam_coeff_path
+    )
 
-    # Apply the rotation
-    theta = np.deg2rad(3)  # Convert 3 degrees to radians
-    xp = xyz_p[:, :, 0] * np.cos(theta) + xyz_p[:, :, 1] * np.sin(theta)
-    yp = -xyz_p[:, :, 0] * np.sin(theta) + xyz_p[:, :, 1] * np.cos(theta)
-    zp = np.zeros_like(xp) + 2
+# Calculate 3D displacement
+displace_3d = vel_object.calculate_3D_displacement(xyz)  # shape: (Nx, Ny, 3)
 
-    rotated_xyz_p = np.stack((xp, yp, zp), axis=-1)
-    true_displace = rotated_xyz_p + [200, 200, 0] - xyz
+# Compute absolute relative error safely
+with np.errstate(divide='ignore', invalid='ignore'):
+    relative_error = np.abs(
+        (displace_3d[..., 0:2] - in_plane_disp[..., 0:2]) / in_plane_disp[..., 0:2] * 100
+        )
+    zero_z = np.zeros((relative_error.shape[0], relative_error.shape[1], 1))
 
-    # truth = true_displace
-    truth = np.array((-1, -1, -2))
-    plot_interpolation(grid, dXYZ_int, "Magnitude", contour=True, plot=True)
-    # _, truth = vel_object.interpolate_3D_displacement(xyz, true_displace)
-    # relative_error = dXYZ_int - truth
-    # plot_interpolation(grid, relative_error, "Relative Error", contour=True, plot=True)
-    # rmse_arr.append(rmse(dXYZ_int, truth))
+    mask = np.ones_like(relative_error, dtype=bool)
+    mask[..., 0] &= (xyz[..., 1] != 200)
+    mask[..., 1] &= (xyz[..., 0] != 200)
 
-x_values = list(range(2, 50, 2))
-plot_window(x_values, rmse_arr)
-# displace_rmse(np.array(rmse_arr))
-plt.show()
+    relative_error[~mask] = np.nan
+    relative_error = np.concatenate((relative_error, zero_z), axis=2)
+
+# grid, dXYZ_int = vel_object.interpolate_3D_displacement(xyz, displace_3d)
+# plot_interpolation(grid, dXYZ_int, "Displacement", "mm", path=r"C:\Users\Kun Qiu\Desktop\Thesis_2026\Test_Cases\in_plane")
+
+
+grid_rel, dXYZ_rel = vel_object.interpolate_3D_displacement(xyz, relative_error)
+plot_interpolation(grid_rel, dXYZ_rel, "Relative Error", "%", path=r"C:\Users\Kun Qiu\Desktop\Thesis_2026\Test_Cases\in_plane")

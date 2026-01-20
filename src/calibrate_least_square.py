@@ -4,16 +4,19 @@ from scipy.optimize import least_squares
 
 
 class CalibrationTransformation:
-    def __init__(self, calibrated_points, distorted_points):
+    def __init__(self, calibrated_points, distorted_points, z_order=2):
         assert len(calibrated_points) == len(distorted_points), "Length of calibration and distortion are not equal."
 
         self.__calibrated_points = np.array(calibrated_points).astype(float)
         self.__distorted_points = np.array(distorted_points).astype(float)
+        self.__z_order = z_order
+        self._mask = self._build_z_mask(self.__z_order)
+        
         self.__NUM_PARAM = 19
         self.__calibrate_param = np.zeros((self.__NUM_PARAM, 2))
 
 
-    def __calibration_residuals_dx(self, coeff):
+    def __calibration_residuals_dx(self, coeff: np.ndarray)-> np.ndarray:
         """
         The residual term of the calibration procedure for projection onto the x coordinate of the
         image plane --> Predicted - Truth
@@ -25,7 +28,7 @@ class CalibrationTransformation:
         return self.__soloff_polynomial(self.__calibrated_points, coeff) - self.__distorted_points[:, 0]
 
     
-    def __calibration_residuals_dy(self, coeff):
+    def __calibration_residuals_dy(self, coeff)-> np.ndarray:
         """
         The residual term of the calibration procedure for projection onto the y coordinate of the
         image plane --> Predicted - Truth
@@ -35,8 +38,8 @@ class CalibrationTransformation:
         """
         return self.__soloff_polynomial(self.__calibrated_points, coeff) - self.__distorted_points[:, 1]
 
-    
-    def __soloff_polynomial(self, XYZ, coeff):
+
+    def __soloff_polynomial(self, XYZ: np.ndarray, coeff: np.ndarray)-> np.ndarray:
         """
         Given the predicted coefficient, determine the transformation onto the image plane from an
         object plane
@@ -49,6 +52,7 @@ class CalibrationTransformation:
 
         xi, yi, zi = XYZ[:, 0], XYZ[:, 1], XYZ[:, 2]
 
+        coeff = coeff * self._mask
         return (coeff[0] +
                 (coeff[1] * xi) + (coeff[2] * yi) + (coeff[3] * zi) +
                 (coeff[4] * (xi ** 2)) + (coeff[5] * xi * yi) +
@@ -60,8 +64,8 @@ class CalibrationTransformation:
                 (coeff[16] * (yi ** 2) * zi) + (coeff[17] * xi * (zi ** 2)) +
                 (coeff[18] * yi * (zi ** 2)))
 
-    
-    def calibrate_least_square(self):
+
+    def calibrate_least_square(self)->None:
         """
         Apply the nonlinear least square to determine the transformation coefficients
         for the Soloff Polynomial.
@@ -77,6 +81,7 @@ class CalibrationTransformation:
             s_y = least_squares(self.__calibration_residuals_dy, params[:, 1], method='trf',
                                 xtol=1.e-15, gtol=1.e-15, ftol=1.e-15, loss='cauchy').x
             self.__calibrate_param = np.column_stack((s_x, s_y))
+        return
 
     
     def get_camera_transform_function(self):
@@ -88,16 +93,17 @@ class CalibrationTransformation:
         return self.__calibrate_param
 
     
-    def clear_calibration_param(self):
+    def clear_calibration_param(self)->None:
         """
         Clears the camera transformation coefficients
 
         :return : None
         """
         self.__calibrate_param = np.array((self.__NUM_PARAM, 2))
+        return
 
     
-    def set_calibration_param(self, coeffs):
+    def set_calibration_param(self, coeffs)->None:
         """
         Set the object's transformation to a user defined coefficient
 
@@ -107,9 +113,10 @@ class CalibrationTransformation:
         assert coeffs.shape == (self.__NUM_PARAM, 2), \
             f"Input parameter does not have the shape of ({self.__NUM_PARAM}, 2)."
         self.__calibrate_param = coeffs
+        return
 
-    
-    def save_calibration_coefficient(self, path, name):
+
+    def save_calibration_coefficient(self, path: str, name:str)->None:
         """
         Save the transformation coefficient to a desired path
 
@@ -118,5 +125,24 @@ class CalibrationTransformation:
         :return     :   Save the calibration coefficient to path
         """
         assert not np.all(self.__calibrate_param == 0), "Camera calibration coefficients cannot be all zeros."
-
         np.save(os.path.join(path, name), self.__calibrate_param)
+        return
+
+
+    @staticmethod
+    def _build_z_mask(max_z_order: int) -> np.ndarray:
+        """
+        Mask coefficients based on maximum z order.
+        """
+        mask = np.ones(19)
+
+        # Terms containing zi
+        z1_terms = [3, 7, 8, 14, 15, 16]
+        z2_terms = [9, 17, 18]
+
+        if max_z_order < 1:
+            mask[z1_terms] = 0.0
+            mask[z2_terms] = 0.0
+        elif max_z_order < 2:
+            mask[z2_terms] = 0.0
+        return mask

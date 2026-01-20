@@ -5,73 +5,69 @@ from utility.Visualization import plot_interpolation
 
 
 class DisplacementInterpolator:
-    def __init__(self, XY: np.ndarray, dXY: np.ndarray, grid_density: int=10, method: str='cubic'):
-        assert grid_density >= 1, "Grid density must be greater or equal to 1."
+    def __init__(self, grid: np.ndarray, values: np.ndarray, density: int=10, method: str='cubic'):
+        assert density >= 1, "Grid density must be greater or equal to 1."
+        self.__density = density
         method = method.lower()
+        
         assert method in ["linear", "cubic", "nearest"], "Invalid interpolation method."
-
-        self.__points = np.array(XY)
-        self.__displacement = np.array(dXY)
-        self.__density = grid_density
         self.__method = method
 
-        self.__interpolate_displacement = None
-        self.__interpolate_grid = None
-        self.compute_interpolate_grid()
+        self.__in_grid = np.array(grid)
+        self.__in_values = np.array(values)
+        
+        self.__intp_grid, self.__intp_values = self.__interpolate_grid()
 
 
-    def compute_interpolate_point(self, XY: np.ndarray) -> np.ndarray:
+    def evaluate(self, pt: np.ndarray) -> np.ndarray:
         """
         Obtain the interpolated value for the point (xi, yi) given some known value
         of surrounding points.
 
-        :param XY   :   The point whose dXY is needed
-        :return     :   The displacement at that point is returned
         """
-        point = np.array(XY)
+        point = np.array(pt)
         assert point.shape == (2,), "Single point must be a 2D coordinate."
 
-        interpolated_x = griddata(self.__points, self.__displacement[:, 0], point, method=self.__method)
-        interpolated_y = griddata(self.__points, self.__displacement[:, 1], point, method=self.__method)
+        interpolated = np.array([
+            griddata(self.__in_grid, self.__in_values[:, i], point, method=self.__method)
+            for i in range(self.__in_values.shape[1])
+            ])        
+        return interpolated
 
-        return np.array([interpolated_x, interpolated_y])
 
-
-    def compute_interpolate_grid(self) -> None:
+    def __interpolate_grid(self) -> tuple[np.ndarray, np.ndarray]:
         """
         Interpolate the entire displacement grid given the grid density and several known
         displacements.
 
         :return :   Interpolated map of the desired value
         """
-        x_min, y_min = np.min(self.__points, axis=0)
-        x_max, y_max = np.max(self.__points, axis=0)
+        x_min, y_min = np.min(self.__in_grid, axis=0)
+        x_max, y_max = np.max(self.__in_grid, axis=0)
         x_new = np.linspace(x_min, x_max, self.__density)
         y_new = np.linspace(y_min, y_max, self.__density)
-
         X_new, Y_new = np.meshgrid(x_new, y_new)
-        interpolate_vector = griddata(self.__points, self.__displacement,
-                                      (X_new, Y_new), method=self.__method)
+        
+        valid_mask = np.all(np.isfinite(self.__in_values), axis=1)
+        interpolate_field = griddata(
+            self.__in_grid[valid_mask], self.__in_values[valid_mask],
+            (X_new, Y_new), method=self.__method
+            )
+        return np.dstack((X_new, Y_new)), interpolate_field
 
-        self.__interpolate_displacement = interpolate_vector
-        self.__interpolate_grid = np.dstack((X_new, Y_new))
 
-        return
-
-
-    def plot_interpolation(self, unit_label: str, contour: bool=False) -> None:
+    def plot_interpolation(self, unit_label:str, contour:bool=False) -> None:
         """
         Plot the interpolation of the displacement using color plot
 
         :param unit_label   :   Label for the color plot
         :param contour      :   Boolean on whether contour lines should be plotted
-        :return             :   None --> Plot
+        :return             :   None 
         """
         plot_interpolation(
-            self.__interpolate_grid, self.__interpolate_displacement,
+            self.__intp_grid, self.__intp_values,
             unit_label=unit_label, contour=contour
             )
-        
         return
 
 
@@ -81,33 +77,4 @@ class DisplacementInterpolator:
 
         :return :   Interpolated grid and the associated displacement
         """
-        return self.__interpolate_grid, self.__interpolate_displacement
-
-
-if __name__ == "__main__":
-    # Example Usage
-    x_coords = np.array([394.1424255371094, 394.06536865234375, 394.0715637207031, 394.0648193359375,
-                         394.068603515625, 394.14312744140625, 446.3945617675781, 446.57440185546875,
-                         446.581787109375, 446.5845642089844, 446.574951171875, 446.4103088378906,
-                         496.98883056640625, 496.6874084472656, 496.6806640625, 496.68194580078125,
-                         496.6742248535156, 496.9674987792969])
-    y_coords = np.array([280.7763977050781, 369.5273132324219, 459.23089599609375, 547.7984619140625,
-                         637.4832763671875, 726.259765625, 286.4818420410156, 373.21728515625,
-                         460.12994384765625, 546.9229125976562, 633.833740234375, 720.5584716796875,
-                         291.7296142578125, 376.4134826660156, 461.1775207519531, 545.8704833984375,
-                         630.62646484375, 715.3019409179688])
-    x_displacement = np.array([1.0, 0.0, -1.0, 0.0,
-                               0.5, -0.5, 1.0, -1.0,
-                               0.8, -0.8, 0.5, -0.5,
-                               0.2, -0.2, 0.3, -0.3,
-                               0.4, -0.4])
-    y_displacement = np.array([0.0, 1.0, 0.0, -1.0,
-                               0.2, -0.2, 0.3, -0.3,
-                               0.4, -0.4, 0.5, -0.5,
-                               0.6, -0.6, 0.7, -0.7,
-                               0.8, -0.8])
-
-    points = np.column_stack((x_coords, y_coords))
-    displacement = np.column_stack((x_displacement, y_displacement))
-    interpolator = DisplacementInterpolator(points, displacement, grid_density=500)
-    point = interpolator.compute_interpolate_point(np.array((400, 400)))
+        return self.__intp_grid, self.__intp_values
