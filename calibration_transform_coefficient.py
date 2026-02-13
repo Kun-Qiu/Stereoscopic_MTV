@@ -277,15 +277,14 @@ class CalibrationPointDetector:
 
 if __name__ == "__main__":
 
-    left = r"C:\Users\Kun Qiu\Desktop\Thesis_2026\Calibration_Volume\left"
-    right = r"C:\Users\Kun Qiu\Desktop\Thesis_2026\Calibration_Volume\right"
-    save_path = r"C:\Users\Kun Qiu\Desktop\Thesis_2026\Calibration_Volume"
-    num_square = 20
-    dim_grid = (20, 20) # Grid squares are 20 mm x 20 mm
+    left = r"C:\Users\Kun Qiu\Desktop\Thesis_2026\Calibration_Volume_Dense\left"
+    right = r"C:\Users\Kun Qiu\Desktop\Thesis_2026\Calibration_Volume_Dense\right"
+    save_path = r"C:\Users\Kun Qiu\Desktop\Thesis_2026\Calibration_Volume_Dense"
+    num_square = 25
+    dim_grid = (400/num_square, 400/num_square) # Grid squares are 20 mm x 20 mm
     
     detector = CalibrationPointDetector(
-        left, right, save_path, 
-        num_square, dim_grid
+        left, right, save_path, num_square, dim_grid
         )
     
     detector.run_calibration()
