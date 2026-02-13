@@ -129,11 +129,15 @@ def plot_projection_error(coeff_path,  csv_path, plot=True):
 
 
 if __name__ == "__main__":
+    """
+    Main driver for plotting the projection error of the calibration procedure.
+    """
+    
     left_coeff_path = r"C:\Users\Kun Qiu\Projects\Stereoscopic_MTV\experiment\left_cam_coeff.npy"
-    left_csv_path = r"C:\Users\Kun Qiu\Desktop\3D_Stereo_Exp\Calibration_Data\camera_points_filtered.csv"
+    left_csv_path = r"C:\Users\Kun Qiu\Desktop\3D_Stereo_Exp\Calibration_Data\cam1_pts.csv"
     left_coeff = np.load(left_coeff_path, allow_pickle=True)
 
-    right_csv_path = r"C:\Users\Kun Qiu\Desktop\3D_Stereo_Exp\Calibration_Data\camera_points_2_filtered.csv"
+    right_csv_path = r"C:\Users\Kun Qiu\Desktop\3D_Stereo_Exp\Calibration_Data\cam2_pts.csv"
     right_coeff_path = r"C:\Users\Kun Qiu\Projects\Stereoscopic_MTV\experiment\right_cam_coeff.npy"
     right_coeff = np.load(right_coeff_path, allow_pickle=True)
 

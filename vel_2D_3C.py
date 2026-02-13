@@ -76,8 +76,6 @@ class Velocity2D_3C:
                     point, name
                     )
 
-                print(f"Projected 2D point for {name} camera: {camera_pt}")
-
                 if name.lower() == "left":
                     # The projected point must be within the convex hull of the individual camera
                     if not self.points_in_left_hull(np.array(camera_pt)):

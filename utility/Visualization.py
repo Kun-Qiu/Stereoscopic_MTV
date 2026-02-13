@@ -78,8 +78,8 @@ def visualize_displacement_difference(field1, field2, image, save_path=None):
 def plot_interpolation(
     XY: np.ndarray, 
     dXYZ: np.ndarray,
+    name: str,
     unit: str, 
-    name: str = "Plot",
     contour: bool = False, 
     path: str | None = None
 ) -> None:
@@ -89,7 +89,7 @@ def plot_interpolation(
 
     :param XY               : The input coordinates, shape (n, m, 2)
     :param dXYZ             : The array to be plotted, shape (n, m, n_components)
-    :param unit_label       : Label for the color bar (unit)
+    :param unit       : Label for the color bar (unit)
     :param contour          : Boolean on whether contour lines should be plotted
     :param path             : Optional path to save individual component figures
     """
@@ -126,10 +126,13 @@ def plot_interpolation(
             im_single = ax_single.pcolormesh(
                 XY[:, :, 0], XY[:, :, 1], dXYZ[:, :, i],
                 vmin=vmin, vmax=vmax,
-                shading='auto'
-            )
+                shading='auto',
+                cmap='RdBu_r'
+                )
+            
             if contour:
                 ax_single.contour(XY[:, :, 0], XY[:, :, 1], dXYZ[:, :, i], levels=levels, colors='k', linewidths=0.5)
+            
             ax_single.set_title(f'Component {i}', fontsize=14)
             cbar_single = fig_single.colorbar(im_single, ax=ax_single, location='right')
             cbar_single.set_label(f"{name} [{unit}]")
