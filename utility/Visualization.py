@@ -78,8 +78,8 @@ def visualize_displacement_difference(field1, field2, image, save_path=None):
 def plot_interpolation(
     XY: np.ndarray, 
     dXYZ: np.ndarray,
-    name: str,
     unit: str, 
+    name: str = "Plot",
     contour: bool = False, 
     path: str | None = None
 ) -> None:
@@ -130,16 +130,16 @@ def plot_interpolation(
             )
             if contour:
                 ax_single.contour(XY[:, :, 0], XY[:, :, 1], dXYZ[:, :, i], levels=levels, colors='k', linewidths=0.5)
-            ax_single.set_title(f'Component {i}')
+            ax_single.set_title(f'Component {i}', fontsize=14)
             cbar_single = fig_single.colorbar(im_single, ax=ax_single, location='right')
             cbar_single.set_label(f"{name} [{unit}]")
-            fig_single.supxlabel(f"X Coordinate [mm]")
-            fig_single.supylabel(f"Y Coordinate [mm]")
+            fig_single.supxlabel(f"X Coordinate [mm]", fontsize=14)
+            fig_single.supylabel(f"Y Coordinate [mm]", fontsize=14)
             fig_single.tight_layout()
             fig_single.savefig(Path(path) / f"{name}_component_{i}.png")
             plt.close(fig_single) 
 
-    fig_comb.supxlabel("X Coordinate [mm]")
-    fig_comb.supylabel("Y Coordinate [mm]")
+    fig_comb.supxlabel("X Coordinate [mm]", fontsize=14)
+    fig_comb.supylabel("Y Coordinate [mm]", fontsize=14)
     fig_comb.tight_layout()
     plt.show()
