@@ -56,17 +56,17 @@ class DisplacementInterpolator:
         return np.dstack((X_new, Y_new)), interpolate_field
 
 
-    def plot_interpolation(self, unit_label:str, contour:bool=False) -> None:
+    def plot_interpolation(self, unit:str, contour:bool=False) -> None:
         """
         Plot the interpolation of the displacement using color plot
 
-        :param unit_label   :   Label for the color plot
+        :param unit         :   Label for the color plot
         :param contour      :   Boolean on whether contour lines should be plotted
         :return             :   None 
         """
         plot_interpolation(
             self.__intp_grid, self.__intp_values,
-            unit_label=unit_label, contour=contour
+            unit=unit, contour=contour
             )
         return
 

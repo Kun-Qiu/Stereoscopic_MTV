@@ -76,10 +76,29 @@ class CalibrationTransformation:
             raise ValueError(f"This function cannot be called if no input corners are given")
         else:
             params = np.zeros((self.__NUM_PARAM, 2))
-            s_x = least_squares(self.__calibration_residuals_dx, params[:, 0], method='trf',
+            mask = self._mask
+
+            def residual_dx(active_coeff):
+                full_coeff = np.zeros(self.__NUM_PARAM)
+                full_coeff[self._mask == 1] = active_coeff
+                return self.__calibration_residuals_dx(full_coeff)
+
+            def residual_dy(active_coeff):
+                full_coeff = np.zeros(self.__NUM_PARAM)
+                full_coeff[self._mask == 1] = active_coeff
+                return self.__calibration_residuals_dy(full_coeff)
+            
+            # Optimize only the active coefficients
+            active_indices = np.where(mask == 1)[0]
+            s_x_active = least_squares(residual_dx, params[:, 0][active_indices], method='trf',
                                 xtol=1.e-15, gtol=1.e-15, ftol=1.e-15, loss='cauchy').x
-            s_y = least_squares(self.__calibration_residuals_dy, params[:, 1], method='trf',
+            s_y_active = least_squares(residual_dy, params[:, 1][active_indices], method='trf',
                                 xtol=1.e-15, gtol=1.e-15, ftol=1.e-15, loss='cauchy').x
+            
+            s_x, s_y = np.zeros(self.__NUM_PARAM), np.zeros(self.__NUM_PARAM)
+            s_x[active_indices] = s_x_active
+            s_y[active_indices] = s_y_active
+
             self.__calibrate_param = np.column_stack((s_x, s_y))
         return
 
