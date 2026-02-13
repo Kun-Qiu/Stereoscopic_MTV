@@ -100,9 +100,7 @@ if __name__ == "__main__":
     try:
         converter = StereoCalibrationXML(xml_file)
         converter.write_matched_csv(output_cam1, output_cam2)
-
         print("Stereo calibration export completed successfully.")
-
     except Exception as e:
         print("Error during stereo calibration export:")
         print(e)

@@ -1,6 +1,7 @@
 import os
 import numpy as np
 import src.inverse_least_square as ils
+import matplotlib.pyplot as plt
 
 from src.interpolator import DisplacementInterpolator
 from scipy.spatial import ConvexHull, Delaunay
@@ -74,6 +75,8 @@ class Velocity2D_3C:
                 camera_pt = self._inverse_obj.projection_object_to_image(
                     point, name
                     )
+
+                print(f"Projected 2D point for {name} camera: {camera_pt}")
 
                 if name.lower() == "left":
                     # The projected point must be within the convex hull of the individual camera
