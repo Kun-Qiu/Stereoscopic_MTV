@@ -65,8 +65,10 @@ class InverseTransform:
                coeff_y_right[17] * xi * (zi ** 2) + coeff_y_right[18] * yi * (zi ** 2))
 
         return [
-            eq1 - img_pt_left[0], eq2 - img_pt_left[1], 
-            eq3 - img_pt_right[0], eq4 - img_pt_right[1]
+            eq1 - img_pt_left[0], 
+            eq2 - img_pt_left[1], 
+            eq3 - img_pt_right[0], 
+            eq4 - img_pt_right[1]
             ]
 
     
@@ -90,7 +92,7 @@ class InverseTransform:
         result = least_squares(
             self.__inverse_polynomial_transform_point, 
             x0=object_pt_predicted, method='trf',
-            xtol=1.e-15, gtol=1.e-15, ftol=1.e-15, loss='cauchy',
+            xtol=1e-10, gtol=1e-10, ftol=1e-10, loss='cauchy',
             args=(left_img_pts, right_img_pts)
             )
 
@@ -195,7 +197,7 @@ class InverseTransform:
         assert dxyz.shape == xyz.shape == (3,), \
             f"The shape of the input displacement and coordinate should be (3, 1). " \
             f"Shape of displacement: {dxyz.shape} and coordinate: {xyz.shape}."
-        assert dXY_l.shape == dXY_r.shape == (2,), f"The shape of the camera displacements should be (3, 1). " \
+        assert dXY_l.shape == dXY_r.shape == (2,), f"The shape of the camera displacements should be (2, 1). " \
                                                    f"Shape of left cam: {dXY_l.shape} and right cam: {dXY_r.shape}."
 
         F11_1, F12_1, F13_1, F21_1, F22_1, F23_1 = self.__inverse_augmented_matrix(
@@ -209,8 +211,10 @@ class InverseTransform:
             )
 
         F = np.array((
-            [F11_1, F12_1, F13_1], [F21_1, F22_1, F23_1],
-            [F11_2, F12_2, F13_2], [F21_2, F22_2, F23_2]
+            [F11_1, F12_1, F13_1], 
+            [F21_1, F22_1, F23_1],
+            [F11_2, F12_2, F13_2],
+            [F21_2, F22_2, F23_2]
             ))
 
         dXY = np.dot(F, dxyz)
@@ -239,13 +243,13 @@ class InverseTransform:
         dxyz_hat = np.array((
             (dXY_l[0] + dXY_r[0]) / 2,
             (dXY_l[1] + dXY_r[1]) / 2,
-            0
+            1e-6
             ), dtype=np.float64)
 
         result = least_squares(
             self.__inverse_displacement_transform_residual, 
             x0=dxyz_hat, method='trf',
-            xtol=1.e-15, gtol=1.e-15, ftol=1.e-15, loss='cauchy',
+            xtol=1e-10, gtol=1e-10, ftol=1e-10, loss='linear',
             args=(xyz, dXY_l, dXY_r)
             )
 
@@ -261,8 +265,7 @@ class InverseTransform:
         :param camera_name      :      The name of the camera which is either right or left
         :return:                        The transformed point on the image plane
         """
-        assert camera_name.lower() == "right" or "left", f"Unknown camera name: {camera_name}, choose either right " \
-                                                         f"or left as name."
+        assert camera_name.lower() in ("left", "right"), f"Unknown camera name: {camera_name}"
 
         if camera_name.lower() == "right":
             params = self.__right_calibrate_coeff
@@ -318,3 +321,33 @@ class InverseTransform:
                        (coeff_y[18] * yi * (zi ** 2)))
 
         return x_predicted, y_predicted
+    
+
+    def compute_svd(self, xyz):
+        """
+        Compute the SVD and condition number of the sensitivity matrix F
+        at a given object-space coordinate.
+        """
+
+        # Right and Left camera derivatives
+        F11_1, F12_1, F13_1, F21_1, F22_1, F23_1 = \
+            self.__inverse_augmented_matrix(xyz, self.__left_calibrate_coeff)
+        
+        F11_2, F12_2, F13_2, F21_2, F22_2, F23_2 = \
+            self.__inverse_augmented_matrix(xyz, self.__right_calibrate_coeff)
+
+        # Sensitivity matrix
+        F = np.array([
+            [F11_1, F12_1, F13_1],
+            [F21_1, F22_1, F23_1],
+            [F11_2, F12_2, F13_2],
+            [F21_2, F22_2, F23_2]
+            ], dtype=np.float64)
+
+        _, S, _ = np.linalg.svd(F)
+        if S[-1] > 0:
+            cond_number = S[0] / S[-1]
+        else:
+            cond_number = np.inf
+        return F, S, cond_number
+

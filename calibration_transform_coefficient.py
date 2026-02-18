@@ -249,7 +249,7 @@ class CalibrationPointDetector:
         flattened_right = detect_corners(self._right_image_set[:, 0])
 
         assert len(calibrated_point) == len(flattened_left) == len(flattened_right), \
-            "Length of calibration and distortion from either left or right camera are not equal."
+            f"Length of calibration {len(calibrated_point)} and distortion from either left {len(flattened_left)} or right camera {len(flattened_right)} are not equal."
 
         np.save(os.path.join(self._save_path, "calibrate_camera_pt.npy"), calibrated_point, allow_pickle=True)
         np.save(os.path.join(self._save_path, "left_camera_pt.npy"), flattened_left, allow_pickle=True)
@@ -277,10 +277,10 @@ class CalibrationPointDetector:
 
 if __name__ == "__main__":
 
-    left = r"C:\Users\Kun Qiu\Desktop\Thesis_2026\Calibration_Volume_Dense\left"
-    right = r"C:\Users\Kun Qiu\Desktop\Thesis_2026\Calibration_Volume_Dense\right"
-    save_path = r"C:\Users\Kun Qiu\Desktop\Thesis_2026\Calibration_Volume_Dense"
-    num_square = 25
+    left = r"C:\Users\Kun Qiu\Desktop\Thesis_2026\Calibration_Volume\left"
+    right = r"C:\Users\Kun Qiu\Desktop\Thesis_2026\Calibration_Volume\right"
+    save_path = r"C:\Users\Kun Qiu\Desktop\Thesis_2026\Calibration_Volume"
+    num_square = 20
     dim_grid = (400/num_square, 400/num_square) # Grid squares are 20 mm x 20 mm
     
     detector = CalibrationPointDetector(

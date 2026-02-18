@@ -80,8 +80,10 @@ def plot_interpolation(
     dXYZ: np.ndarray,
     name: str,
     unit: str, 
+    color: str|None = None,
     contour: bool = False, 
-    path: str | None = None
+    path: str | None = None,
+    invert_y: bool = False
 ) -> None:
     """
     Plot the given dXYZ array (2D/3D) with individual color scales for each component.
@@ -117,23 +119,32 @@ def plot_interpolation(
             ax.contour(XY[:, :, 0], XY[:, :, 1], dXYZ[:, :, i], levels=levels, colors='k', linewidths=0.5)
 
         cbar = fig_comb.colorbar(im, ax=ax, location='right')
-        cbar.set_label(name)
+        cbar.set_label(name, fontsize=14)
 
         # Save each component as its own figure if path provided
         if path is not None:
             Path(path).mkdir(parents=True, exist_ok=True)
             fig_single, ax_single = plt.subplots(figsize=(6, 5))
-            im_single = ax_single.pcolormesh(
-                XY[:, :, 0], XY[:, :, 1], dXYZ[:, :, i],
-                vmin=vmin, vmax=vmax,
-                shading='auto',
-                cmap='RdBu_r'
-                )
+            if color is None:
+                im_single = ax_single.pcolormesh(
+                    XY[:, :, 0], XY[:, :, 1], dXYZ[:, :, i],
+                    vmin=vmin, vmax=vmax,
+                    shading='auto'
+                    )
+            else:
+                im_single = ax_single.pcolormesh(
+                    XY[:, :, 0], XY[:, :, 1], dXYZ[:, :, i],
+                    vmin=vmin, vmax=vmax,
+                    shading='auto',
+                    cmap=color
+                    )
             
             if contour:
                 ax_single.contour(XY[:, :, 0], XY[:, :, 1], dXYZ[:, :, i], levels=levels, colors='k', linewidths=0.5)
             
             ax_single.set_title(f'Component {i}', fontsize=14)
+            if invert_y:
+                ax_single.invert_yaxis()
             cbar_single = fig_single.colorbar(im_single, ax=ax_single, location='right')
             cbar_single.set_label(f"{name} [{unit}]")
             fig_single.supxlabel(f"X Coordinate [mm]", fontsize=14)

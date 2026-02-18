@@ -51,13 +51,13 @@ class CalibrationPointDetector:
         left_nsl_object = nsl.CalibrationTransformation(
             calibrated_points=self._left_calibrated_points,
             distorted_points=self._left_image_points,
-            z_order=1
+            z_order=2
             )
         
         right_nsl_object = nsl.CalibrationTransformation(
             calibrated_points=self._right_calibrated_points,
             distorted_points=self._right_image_points,
-            z_order=1
+            z_order=2
             )
 
         print("Calculating transformation coefficient for cameras...")

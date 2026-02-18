@@ -23,7 +23,6 @@ class DisplacementInterpolator:
         """
         Obtain the interpolated value for the point (xi, yi) given some known value
         of surrounding points.
-
         """
         point = np.array(pt)
         assert point.shape == (2,), "Single point must be a 2D coordinate."
@@ -39,8 +38,6 @@ class DisplacementInterpolator:
         """
         Interpolate the entire displacement grid given the grid density and several known
         displacements.
-
-        :return :   Interpolated map of the desired value
         """
         x_min, y_min = np.min(self.__in_grid, axis=0)
         x_max, y_max = np.max(self.__in_grid, axis=0)
@@ -59,14 +56,10 @@ class DisplacementInterpolator:
     def plot_interpolation(self, unit:str, contour:bool=False) -> None:
         """
         Plot the interpolation of the displacement using color plot
-
-        :param unit         :   Label for the color plot
-        :param contour      :   Boolean on whether contour lines should be plotted
-        :return             :   None 
         """
         plot_interpolation(
             self.__intp_grid, self.__intp_values,
-            unit=unit, contour=contour
+            name="Interpolate", unit=unit, contour=contour
             )
         return
 
@@ -74,7 +67,5 @@ class DisplacementInterpolator:
     def get_interpolate(self) -> tuple:
         """
         Get the interpolated values for the coordinate and the displacement
-
-        :return :   Interpolated grid and the associated displacement
         """
         return self.__intp_grid, self.__intp_values

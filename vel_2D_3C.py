@@ -1,7 +1,6 @@
 import os
 import numpy as np
 import src.inverse_least_square as ils
-import matplotlib.pyplot as plt
 
 from src.interpolator import DisplacementInterpolator
 from scipy.spatial import ConvexHull, Delaunay
@@ -42,7 +41,6 @@ class Velocity2D_3C:
         # Interpolate the displacement to a grid
         self._left_intp = DisplacementInterpolator(XY_l, dXY_l, density=500)
         self._right_intp = DisplacementInterpolator(XY_r, dXY_r, density=500)
-
         self._build_hulls()
 
     
@@ -64,7 +62,7 @@ class Velocity2D_3C:
         """
         Extract the 2D displacement at known 3D points
         """
-        
+
         width, height, _ = xyz.shape
         dXY_2D = np.full((width, height, 2), np.nan)
 
@@ -89,7 +87,6 @@ class Velocity2D_3C:
                     raise ValueError(
                         f"Camera name {name} is not recognized. Only 'left' or 'right' is allowed."
                         )
-                
                 dXY_2D[i, j] = displacement.ravel()
         return dXY_2D
 
@@ -127,7 +124,7 @@ class Velocity2D_3C:
         # Project 3D Points onto 2D Image and retrieve the corresponding displacement 
         # [dim1, dim2] of xyz
         left_dXY = self.__project_2D_delta(xyz, 'left').reshape(-1, 2)     
-        right_dXY = self.__project_2D_delta(xyz, 'right').reshape(-1, 2)   
+        right_dXY = self.__project_2D_delta(xyz, 'right').reshape(-1, 2)
 
         N = xyz.reshape(-1, 3).shape[0]
         displace_3D = np.full((N, 3), np.nan)
