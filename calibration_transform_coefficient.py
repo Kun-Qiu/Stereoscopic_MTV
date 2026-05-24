@@ -105,7 +105,7 @@ def detect_corners(image_set_path):
 
         _, _, _, centroids = cv2.connectedComponentsWithStats(dst)
         criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 100, 0.001)
-        corners = cv2.cornerSubPix(gray, np.float32(centroids), (11, 11), (-1, -1), criteria)
+        corners = cv2.cornerSubPix(gray, np.float32(centroids[1:]), (11, 11), (-1, -1), criteria)
         single_img_corners = manual_detection_corners(img, corners, handle_mouse_bool=True)
         sorted_corners = np.array(get_sorted_corner(single_img_corners))
 

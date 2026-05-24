@@ -180,6 +180,14 @@ if __name__ == "__main__":
         ax.set_xticks(out_of_plane_mm)
         ax.set_xticklabels(labels)
 
+    box_text = (
+        f"Baseline (0 mm)\n"
+        f"$v_x$: $\\mu$={gt_vx.mean():.4f}, $\\sigma$={gt_vx.std():.4f}\n"
+        f"$v_y$: $\\mu$={gt_vy.mean():.4f}, $\\sigma$={gt_vy.std():.4f}"
+    )
+    fig.text(0.02, 0.97, box_text, va='top', ha='left', fontsize=8,
+             bbox=dict(boxstyle='round,pad=0.4', facecolor='white', edgecolor='gray', linewidth=0.8))
+
     axes[1].tick_params(labelleft=False)
     fig.supxlabel('Out-of-Plane Displacement (mm)', fontsize=11)
     fig.supylabel('Displacement Error (px)', fontsize=11)
