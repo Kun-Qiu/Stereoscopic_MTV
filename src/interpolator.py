@@ -53,13 +53,15 @@ class DisplacementInterpolator:
         return np.dstack((X_new, Y_new)), interpolate_field
 
 
-    def plot_interpolation(self, unit:str, contour:bool=False) -> None:
+    def plot_interpolation(self, axis_unit:str, color_unit:str, contour:bool=False, invert_y:bool=False) -> None:
         """
         Plot the interpolation of the displacement using color plot
         """
         plot_interpolation(
             self.__intp_grid, self.__intp_values,
-            name="Interpolate", unit=unit, contour=contour
+            name=color_unit, unit=axis_unit, contour=contour,
+            input_pts=[self.__in_grid, self.__in_values],
+            invert_y=invert_y
             )
         return
 

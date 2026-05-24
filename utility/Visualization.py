@@ -83,7 +83,8 @@ def plot_interpolation(
     color: str|None = None,
     contour: bool = False, 
     path: str | None = None,
-    invert_y: bool = False
+    invert_y: bool = False,
+    input_pts: tuple[np.ndarray, np.ndarray] | None = None
 ) -> None:
     """
     Plot the given dXYZ array (2D/3D) with individual color scales for each component.
@@ -91,9 +92,11 @@ def plot_interpolation(
 
     :param XY               : The input coordinates, shape (n, m, 2)
     :param dXYZ             : The array to be plotted, shape (n, m, n_components)
-    :param unit       : Label for the color bar (unit)
+    :param unit             : Label for the color bar (unit)
     :param contour          : Boolean on whether contour lines should be plotted
     :param path             : Optional path to save individual component figures
+    :param invert_y         : Boolean to invert y-axis
+    :param input_pts        : Optional tuple of (coords, values) where coords shape (k, 2) and values shape (k, n_components)
     """
     XY, dXYZ = np.array(XY), np.array(dXYZ)
     n_components = dXYZ.shape[2]
@@ -117,6 +120,21 @@ def plot_interpolation(
         if contour:
             levels = np.linspace(vmin, vmax, 10)
             ax.contour(XY[:, :, 0], XY[:, :, 1], dXYZ[:, :, i], levels=levels, colors='k', linewidths=0.5)
+
+        # Plot input points if provided
+        if input_pts is not None:
+            pts_coords, pts_values = input_pts
+            # Scatter plot with colors matching the component values and black borders
+            scatter = ax.scatter(
+                pts_coords[:, 0], pts_coords[:, 1],
+                c=pts_values[:, i],
+                cmap=plt.cm.viridis if color is None else color,
+                vmin=vmin, vmax=vmax,
+                edgecolors='black',
+                linewidths=1,
+                s=50,
+                zorder=5
+            )
 
         cbar = fig_comb.colorbar(im, ax=ax, location='right')
         cbar.set_label(name, fontsize=14)
@@ -142,18 +160,32 @@ def plot_interpolation(
             if contour:
                 ax_single.contour(XY[:, :, 0], XY[:, :, 1], dXYZ[:, :, i], levels=levels, colors='k', linewidths=0.5)
             
+            # Plot input points on single figure
+            if input_pts is not None:
+                pts_coords, pts_values = input_pts
+                scatter_single = ax_single.scatter(
+                    pts_coords[:, 0], pts_coords[:, 1],
+                    c=pts_values[:, i],
+                    cmap=plt.cm.viridis if color is None else color,
+                    vmin=vmin, vmax=vmax,
+                    edgecolors='black',
+                    linewidths=1,
+                    s=50,
+                    zorder=5
+                )
+            
             ax_single.set_title(f'Component {i}', fontsize=14)
             if invert_y:
                 ax_single.invert_yaxis()
             cbar_single = fig_single.colorbar(im_single, ax=ax_single, location='right')
             cbar_single.set_label(f"{name} [{unit}]")
-            fig_single.supxlabel(f"X Coordinate [mm]", fontsize=14)
-            fig_single.supylabel(f"Y Coordinate [mm]", fontsize=14)
+            fig_single.supxlabel(f"X Coordinate [{unit}]", fontsize=14)
+            fig_single.supylabel(f"Y Coordinate [{unit}]", fontsize=14)
             fig_single.tight_layout()
             fig_single.savefig(Path(path) / f"{name}_component_{i}.png")
             plt.close(fig_single) 
 
-    fig_comb.supxlabel("X Coordinate [mm]", fontsize=14)
-    fig_comb.supylabel("Y Coordinate [mm]", fontsize=14)
+    fig_comb.supxlabel(f"X Coordinate [{unit}]", fontsize=14)
+    fig_comb.supylabel(f"Y Coordinate [{unit}]", fontsize=14)
     fig_comb.tight_layout()
     plt.show()
